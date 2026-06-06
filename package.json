@@ -5,6 +5,10 @@
   "engines": {
     "node": "22.x"
   },
+  "packageManager": "pnpm@10.5.2",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "esbuild", "@tailwindcss/oxide", "unrs-resolver"]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -36,7 +36,7 @@ Build runs `prisma generate` (postinstall) + `next build`. Start runs
 ## 4. Seed reference data (once)
 
 ```bash
-railway run npm run db:seed     # 48 teams + 72 fixtures
+railway run pnpm db:seed     # 48 teams + 72 fixtures
 ```
 
 ## 5. Enter the pool
@@ -50,7 +50,7 @@ railway run npm run db:seed     # 48 teams + 72 fixtures
 Manual entry already auto-updates the board. To automate via the API, set
 `SCORE_PROVIDER=apifootball` + `APIFOOTBALL_KEY`, then schedule the sync:
 
-- **Railway cron service** running `npm run sync` every ~1–2 min during matches, **or**
+- **Railway cron service** running `pnpm sync` every ~1–2 min during matches, **or**
 - any scheduler hitting `POST /api/cron/sync` with header
   `Authorization: Bearer $CRON_SECRET`.
 

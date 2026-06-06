@@ -1,0 +1,64 @@
+// API-Football provider (api-sports.io / RapidAPI). Reads fixtures for the
+// 2026 World Cup. Plug in APIFOOTBALL_KEY (+ optional APIFOOTBALL_LEAGUE/SEASON)
+// via env. Until verified against the live feed, the manual admin path remains
+// the source of truth — both flow through the same settlement.
+//
+// Docs: https://www.api-football.com/documentation-v3#tag/Fixtures
+
+import type { FeedFixture, FeedStatus, ScoreProvider } from "./types";
+
+const BASE = process.env.APIFOOTBALL_BASE || "https://v3.football.api-sports.io";
+// World Cup league id on API-Football is 1; season 2026.
+const LEAGUE = process.env.APIFOOTBALL_LEAGUE || "1";
+const SEASON = process.env.APIFOOTBALL_SEASON || "2026";
+
+// API-Football short statuses -> our model.
+function mapStatus(short: string): FeedStatus {
+  if (["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT"].includes(short)) return "LIVE";
+  if (["FT", "AET", "PEN", "AWD", "WO"].includes(short)) return "FINISHED";
+  return "SCHEDULED";
+}
+
+interface ApiFixtureRow {
+  fixture: { id: number; date: string; status: { short: string } };
+  teams: {
+    home: { id: number; name: string; winner: boolean | null };
+    away: { id: number; name: string; winner: boolean | null };
+  };
+  goals: { home: number | null; away: number | null };
+}
+
+export class ApiFootballProvider implements ScoreProvider {
+  readonly name = "api-football";
+  constructor(private readonly key = process.env.APIFOOTBALL_KEY) {}
+
+  async fetchFixtures(): Promise<FeedFixture[]> {
+    if (!this.key) throw new Error("APIFOOTBALL_KEY is not set");
+    const url = `${BASE}/fixtures?league=${LEAGUE}&season=${SEASON}`;
+    const res = await fetch(url, {
+      headers: { "x-apisports-key": this.key },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`api-football ${res.status}: ${await res.text()}`);
+    const json = (await res.json()) as { response: ApiFixtureRow[] };
+
+    return (json.response ?? []).map((r): FeedFixture => {
+      const status = mapStatus(r.fixture.status.short);
+      let winnerName: string | null = null;
+      if (status === "FINISHED") {
+        if (r.teams.home.winner) winnerName = r.teams.home.name;
+        else if (r.teams.away.winner) winnerName = r.teams.away.name;
+      }
+      return {
+        externalRef: `apifootball:${r.fixture.id}`,
+        kickoff: r.fixture.date,
+        status,
+        homeName: r.teams.home.name,
+        awayName: r.teams.away.name,
+        homeScore: r.goals.home,
+        awayScore: r.goals.away,
+        winnerName,
+      };
+    });
+  }
+}

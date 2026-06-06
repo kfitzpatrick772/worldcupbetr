@@ -1,0 +1,318 @@
+// 2026 World Cup Bracket — data model.
+// Architecture: Ingest (match results) -> Settle (pure scoring) -> Serve (snapshot).
+// Picks are entered by the admin and locked at kickoff. Actuals are stored
+// explicitly (admin-confirmed, optionally auto-suggested) so the scoring engine
+// stays a pure function of (locked picks, stored actuals).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----------------------------------------------------------------------------
+// Reference data
+// ----------------------------------------------------------------------------
+
+enum Stage {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD // third-place match
+  FINAL
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+}
+
+enum Outcome {
+  HOME
+  AWAY
+  DRAW
+}
+
+model Team {
+  id    String @id @default(cuid())
+  code  String @unique // FIFA 3-letter code
+  name  String @unique
+  flag  String // emoji
+  group String // "A".."L"
+
+  homeMatches Match[] @relation("home")
+  awayMatches Match[] @relation("away")
+  wonMatches  Match[] @relation("winner")
+
+  groupStandingPicks GroupStandingPick[]
+  bestThirdPicks    BestThirdPick[]
+  advancePicks      AdvancePick[]
+  championOf        FinalPick[] @relation("champion")
+  runnerUpOf        FinalPick[] @relation("runnerUp")
+  thirdPlaceOf      FinalPick[] @relation("thirdPlace")
+
+  groupStandingActuals GroupStandingActual[]
+  bestThirdActuals     BestThirdActual[]
+  advanceActuals       AdvanceActual[]
+
+  @@index([group])
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  stage       Stage
+  group       String? // set for GROUP stage
+  slotLabel   String? // e.g. "R32-1" for knockout wiring/ordering
+  homeTeamId  String?
+  awayTeamId  String?
+  kickoff     DateTime
+  status      MatchStatus @default(SCHEDULED)
+  homeScore   Int?
+  awayScore   Int?
+  // For knockouts that go to ET/penalties, the advancing side is explicit.
+  winnerTeamId String?
+  externalRef String?     @unique // API fixture id, for the feed
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  homeTeam   Team? @relation("home", fields: [homeTeamId], references: [id])
+  awayTeam   Team? @relation("away", fields: [awayTeamId], references: [id])
+  winnerTeam Team? @relation("winner", fields: [winnerTeamId], references: [id])
+
+  groupMatchPicks GroupMatchPick[]
+
+  // Idempotent fixture key for seeding/upserts (NULLs are distinct in Postgres,
+  // so knockout placeholders with null teams don't collide).
+  @@unique([stage, group, homeTeamId, awayTeamId], name: "fixtureKey")
+  @@index([stage])
+  @@index([group])
+  @@index([kickoff])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Participants & predictions (entered by admin, locked at kickoff)
+// ----------------------------------------------------------------------------
+
+model Participant {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  groupMatchPicks    GroupMatchPick[]
+  groupStandingPicks GroupStandingPick[]
+  bestThirdPicks     BestThirdPick[]
+  advancePicks       AdvancePick[]
+  finalPick          FinalPick?
+  scoreLines         ScoreLine[]
+  standing           Standing?
+}
+
+// Predicted scoreline for a single group match (2 pts winner/draw, +2 exact).
+model GroupMatchPick {
+  id            String @id @default(cuid())
+  participantId String
+  matchId       String
+  predHome      Int
+  predAway      Int
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  match       Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, matchId])
+  @@index([matchId])
+}
+
+// Predicted group finishers: position 1 (winner) and 2 (runner-up).
+model GroupStandingPick {
+  id            String @id @default(cuid())
+  participantId String
+  group         String
+  position      Int // 1 or 2
+  teamId        String
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, group, position])
+  @@index([participantId])
+}
+
+// Predicted best-third qualifiers (8 per participant).
+model BestThirdPick {
+  id            String @id @default(cuid())
+  participantId String
+  teamId        String
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, teamId])
+  @@index([participantId])
+}
+
+enum AdvanceRound {
+  R16 // teams reaching R16 (won R32) — 16 teams, 10 pts each
+  QF // reaching QF (won R16) — 8 teams, 20 pts each
+  SF // reaching SF (won QF) — 4 teams, 40 pts each
+  FINAL // reaching Final (won SF) — 2 teams, 80 pts each
+}
+
+// Predicted set of teams reaching a given knockout round.
+model AdvancePick {
+  id            String       @id @default(cuid())
+  participantId String
+  round         AdvanceRound
+  teamId        String
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, round, teamId])
+  @@index([participantId, round])
+}
+
+// Champion (160), runner-up (40), third-place match winner (40).
+model FinalPick {
+  id               String @id @default(cuid())
+  participantId    String @unique
+  championTeamId   String
+  runnerUpTeamId   String
+  thirdPlaceTeamId String
+
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  championTeam   Team        @relation("champion", fields: [championTeamId], references: [id])
+  runnerUpTeam   Team        @relation("runnerUp", fields: [runnerUpTeamId], references: [id])
+  thirdPlaceTeam Team        @relation("thirdPlace", fields: [thirdPlaceTeamId], references: [id])
+}
+
+// ----------------------------------------------------------------------------
+// Actual results (the "truth" the engine settles against)
+// Group match results live on Match. These capture derived/admin-confirmed truth.
+// ----------------------------------------------------------------------------
+
+model GroupStandingActual {
+  id       String @id @default(cuid())
+  group    String
+  position Int // 1..4
+  teamId   String
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([group, position])
+}
+
+model BestThirdActual {
+  id     String @id @default(cuid())
+  teamId String @unique
+
+  team Team @relation(fields: [teamId], references: [id])
+}
+
+model AdvanceActual {
+  id     String       @id @default(cuid())
+  round  AdvanceRound
+  teamId String
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([round, teamId])
+}
+
+// Singleton row (id = 1) for the actual final results.
+model FinalActual {
+  id               Int     @id @default(1)
+  championTeamId   String?
+  runnerUpTeamId   String?
+  thirdPlaceTeamId String?
+}
+
+// ----------------------------------------------------------------------------
+// Scoring outputs (recomputed each settlement)
+// ----------------------------------------------------------------------------
+
+enum ScoreCategory {
+  GROUP_MATCH
+  GROUP_ADVANCE
+  GROUP_WINNER_BONUS
+  GROUP_RUNNERUP_BONUS
+  BEST_THIRD
+  ADVANCE_R16
+  ADVANCE_QF
+  ADVANCE_SF
+  ADVANCE_FINAL
+  CHAMPION
+  RUNNERUP
+  THIRD_PLACE
+}
+
+// One row per awarded (or zero) scoring item — powers per-match drill-downs.
+model ScoreLine {
+  id            String        @id @default(cuid())
+  participantId String
+  category      ScoreCategory
+  points        Int
+  matchId       String? // for GROUP_MATCH drill-downs
+  teamId        String? // for advance/best-third/final items
+  group         String?
+  detail        String? // human-readable ("Spain 2-1, exact +2")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([matchId])
+  @@index([category])
+}
+
+// Leaderboard snapshot (rank, movement, ceiling) — the serve path reads this.
+model Standing {
+  participantId String   @id
+  totalPoints   Int      @default(0)
+  rank          Int      @default(0)
+  prevRank      Int? // for ▲▼ movement
+  maxPossible   Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------------------
+// Operations / integrity
+// ----------------------------------------------------------------------------
+
+// Singleton (id = 1).
+model AppState {
+  id            Int       @id @default(1)
+  picksLocked   Boolean   @default(false)
+  lockedAt      DateTime?
+  lastSettledAt DateTime?
+}
+
+model SettlementRun {
+  id         String    @id @default(cuid())
+  trigger    String // "manual" | "feed" | "admin-override"
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  summary    Json?
+}
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  actor    String // "admin" | "feed"
+  action   String
+  entity   String?
+  entityId String?
+  before   Json?
+  after    Json?
+  note     String?
+
+  @@index([at])
+}

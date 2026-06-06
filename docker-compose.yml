@@ -1,0 +1,22 @@
+# Local development database only. Production uses Railway-managed Postgres.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: wcb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wcb
+      POSTGRES_PASSWORD: wcb_local_dev
+      POSTGRES_DB: worldcup
+    ports:
+      - "5432:5432"
+    volumes:
+      - wcb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wcb -d worldcup"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  wcb_pgdata:

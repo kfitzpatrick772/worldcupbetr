@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/*
+  2026 World Cup Bracket — design system.
+  Palette ported from reference/design-mockup.html: black-green base,
+  neon lime accent, gold for champion/leader. Tailwind v4 @theme tokens
+  generate utilities (bg-bg, text-ink, text-lime, font-display, ...).
+*/
+@theme {
+  --color-bg: #080b0a;
+  --color-bg2: #0d1411;
+  --color-panel: #121a17;
+  --color-panel2: #18221d;
+  --color-raised: #1d2a23;
+  --color-line: #26342c;
+  --color-line2: #324339;
+  --color-ink: #eef4ef;
+  --color-mut: #8a9b91;
+  --color-dim: #5d6e64;
+
+  --color-lime: #b9f73e;
+  --color-lime2: #8fd41f;
+  --color-gold: #f7c948;
+  --color-blue: #63b3ff;
+  --color-amber: #f5a524;
+  --color-red: #ff6b6b;
+
+  --font-display: var(--font-anton), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-spline), system-ui, sans-serif;
+  --font-mono: var(--font-spline-mono), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(900px 500px at 80% -10%, rgba(185, 247, 62, 0.07), transparent 60%),
+    radial-gradient(700px 600px at -10% 20%, rgba(99, 179, 255, 0.05), transparent 55%);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+/* Display headings use the Anton condensed face, uppercased. */
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+/* Tabular figures so live-updating numbers never jitter. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* Subtle neon focus ring for accessibility on the dark theme. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: rgba(185, 247, 62, 0.25);
+  color: var(--color-ink);
+}

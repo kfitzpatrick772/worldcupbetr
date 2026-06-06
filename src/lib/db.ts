@@ -1,5 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma";
+// Relative (not @/ alias) so this module also loads under plain tsx/node
+// (seed, scripts, the feed worker) — not just inside Next's bundler.
+import { PrismaClient } from "../generated/prisma";
 
 // Prisma 7 requires a driver adapter for the runtime connection.
 // Singleton across hot-reloads in dev to avoid exhausting connections.

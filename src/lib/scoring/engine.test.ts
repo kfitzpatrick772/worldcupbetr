@@ -199,6 +199,53 @@ describe("group advancement", () => {
 
 // ---- best thirds -----------------------------------------------------------
 
+describe("invalid-input defense (audit fixes)", () => {
+  it("same team in both group slots advances once (5+3, not 5+5+3)", () => {
+    const r = scoreParticipant(
+      emptyPicks({
+        groupStanding: [
+          { group: "A", position: 1, teamId: "ENG" },
+          { group: "A", position: 2, teamId: "ENG" }, // invalid duplicate
+        ],
+      }),
+      map(),
+      emptyActuals({
+        groupStandings: [
+          { group: "A", position: 1, teamId: "ENG" },
+          { group: "A", position: 2, teamId: "USA" },
+        ],
+        groupsFinalized: ["A"],
+      }),
+    );
+    // ENG advances once (5) + correct winner (3) = 8
+    expect(r.lockedPoints).toBe(8);
+    expect(r.lines.filter((l) => l.category === "GROUP_ADVANCE")).toHaveLength(1);
+  });
+
+  it("duplicate best-third picks score once", () => {
+    const r = scoreParticipant(
+      emptyPicks({ bestThird: ["T1", "T1"] }),
+      map(),
+      emptyActuals({ bestThirds: ["T1"], bestThirdsFinalized: true }),
+    );
+    expect(r.lockedPoints).toBe(5);
+  });
+
+  it("duplicate advance picks score once", () => {
+    const r = scoreParticipant(
+      emptyPicks({
+        advance: [
+          { round: "R16", teamId: "A" },
+          { round: "R16", teamId: "A" },
+        ],
+      }),
+      map(),
+      emptyActuals({ advance: [{ round: "R16", teamId: "A" }] }),
+    );
+    expect(r.livePoints).toBe(10);
+  });
+});
+
 describe("best thirds", () => {
   it("awards 5 per correct qualifier once finalized", () => {
     const r = scoreParticipant(

@@ -92,12 +92,14 @@ export function scoreParticipant(
     const actualTop2 = new Set([actual1, actual2].filter(Boolean) as string[]);
 
     const myPicks = picks.groupStanding.filter((g) => g.group === group);
-    for (const pick of myPicks) {
-      if (actualTop2.has(pick.teamId)) {
+    // Award advancement once per DISTINCT picked team — a team can only advance
+    // once even if (invalidly) entered in both slots.
+    for (const teamId of new Set(myPicks.map((p) => p.teamId))) {
+      if (actualTop2.has(teamId)) {
         lines.push({
           category: "GROUP_ADVANCE",
           points: POINTS.advance,
-          teamId: pick.teamId,
+          teamId,
           group,
           detail: `Advanced from Group ${group}`,
         });
@@ -128,7 +130,7 @@ export function scoreParticipant(
   // ---- 3. Best third-place qualifiers -------------------------------------
   if (actuals.bestThirdsFinalized) {
     const actualThirds = new Set(actuals.bestThirds);
-    for (const teamId of picks.bestThird) {
+    for (const teamId of new Set(picks.bestThird)) {
       if (actualThirds.has(teamId)) {
         lines.push({
           category: "BEST_THIRD",
@@ -148,7 +150,11 @@ export function scoreParticipant(
     if (!actualAdvance.has(a.round)) actualAdvance.set(a.round, new Set());
     actualAdvance.get(a.round)!.add(a.teamId);
   }
+  const seenAdvance = new Set<string>();
   for (const pick of picks.advance) {
+    const key = `${pick.round}:${pick.teamId}`;
+    if (seenAdvance.has(key)) continue; // dedup defensively
+    seenAdvance.add(key);
     const set = actualAdvance.get(pick.round);
     if (set && set.has(pick.teamId)) {
       lines.push({
@@ -238,9 +244,9 @@ function remainingCeiling(
     }
   }
 
-  // Best thirds not finalized: up to 5 per pick.
+  // Best thirds not finalized: up to 5 per distinct pick.
   if (!actuals.bestThirdsFinalized) {
-    ceil += picks.bestThird.length * POINTS.bestThird;
+    ceil += new Set(picks.bestThird).size * POINTS.bestThird;
   }
 
   // Knockout rounds not finalized: up to roundValue per pick not yet awarded.
@@ -251,7 +257,11 @@ function remainingCeiling(
     if (r) awardedByRound.set(r, (awardedByRound.get(r) ?? 0) + 1);
   }
   const picksByRound = new Map<AdvanceRound, number>();
+  const seenRoundTeam = new Set<string>();
   for (const p of picks.advance) {
+    const key = `${p.round}:${p.teamId}`;
+    if (seenRoundTeam.has(key)) continue;
+    seenRoundTeam.add(key);
     picksByRound.set(p.round, (picksByRound.get(p.round) ?? 0) + 1);
   }
   for (const round of ["R16", "QF", "SF", "FINAL"] as AdvanceRound[]) {

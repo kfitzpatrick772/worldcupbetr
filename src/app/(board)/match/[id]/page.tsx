@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAppState, getMatchDetail } from "@/lib/queries";
 import { Flag, ScoreCell, StatusBadge } from "@/components/ui";
+import { LiveMinute } from "@/components/LiveMinute";
 import { formatKickoff, stageLabel } from "@/lib/format";
 import { outcomeOf } from "@/lib/scoring/engine";
 
@@ -33,7 +34,14 @@ export default async function MatchPage({
       <div className="mt-3 rounded-2xl border border-line bg-gradient-to-b from-panel2 to-panel p-5">
         <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-mut">
           <span>{stageLabel(m.stage, m.group)}</span>
-          <StatusBadge status={m.status} />
+          {m.status === "LIVE" ? (
+            <span className="flex items-center gap-1.5 text-red">
+              <StatusBadge status="LIVE" />
+              <LiveMinute kickoffMs={m.kickoff.getTime()} />
+            </span>
+          ) : (
+            <StatusBadge status={m.status} />
+          )}
         </div>
         <div className="flex items-center justify-center gap-4">
           <div className="flex flex-1 flex-col items-center gap-1 text-center">

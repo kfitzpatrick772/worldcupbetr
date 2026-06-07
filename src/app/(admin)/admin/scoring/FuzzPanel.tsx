@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CATEGORY_LABEL } from "@/lib/format";
-import { runFuzz, runFuzzCase, type FuzzFailure, type FuzzReport } from "@/lib/scoring/fuzz";
+import {
+  runFuzz,
+  runFuzzCase,
+  runSanityCheck,
+  type FuzzFailure,
+  type FuzzReport,
+  type SanityReport,
+} from "@/lib/scoring/fuzz";
 
-// The clickable "eval loop": generate full synthetic scenarios (12 players with
-// random picks across every category + random results), grade them with both the
-// real engine and an independent oracle, and report any disagreement. Runs in the
-// browser so it can loop continuously without hammering the server.
+// The clickable randomized test: generate full synthetic scenarios (12 players
+// with random picks across every category + random results), grade each with both
+// the real engine and an independent oracle, and report any disagreement. Runs
+// entirely in YOUR browser (no server / DB / network), which is why it's instant.
 
 const BATCH = 2000; // scenarios per click / per loop tick
 
@@ -29,13 +36,18 @@ export function FuzzPanel() {
   const [looping, setLooping] = useState(false);
   const [seedInput, setSeedInput] = useState("");
   const [repro, setRepro] = useState<{ seed: number; fails: FuzzFailure[] } | null>(null);
+  const [perf, setPerf] = useState<{ ms: number; rate: number } | null>(null);
+  const [sanity, setSanity] = useState<SanityReport | null>(null);
   const baseRef = useRef(1);
   const loopRef = useRef(false);
 
   const runOnce = useCallback((): FuzzReport => {
     const base = baseRef.current;
     baseRef.current = (base + BATCH) >>> 0;
+    const t0 = performance.now();
     const r = runFuzz(BATCH, base);
+    const ms = performance.now() - t0;
+    setPerf({ ms, rate: Math.round((r.iterations / ms) * 1000) });
     setReport(r);
     setTotal((t) => t + r.iterations);
     if (!r.ok) setFailedTotal((f) => f + r.failed);
@@ -53,8 +65,9 @@ export function FuzzPanel() {
     }, 0);
   }, [runOnce]);
 
-  // The "learning loop": while `looping`, keep running batches (yielding between
-  // ticks so the UI stays responsive). Stops on toggle-off or first failure.
+  // Continuous mode: while `looping`, keep running fresh batches (each with new
+  // seeds, yielding between ticks so the UI stays responsive). Stops on toggle-off
+  // or the first failure, so a discrepancy is never scrolled past.
   useEffect(() => {
     if (!looping) return;
     let cancelled = false;
@@ -93,6 +106,8 @@ export function FuzzPanel() {
     setFailedTotal(0);
     setReport(null);
     setRepro(null);
+    setPerf(null);
+    setSanity(null);
     baseRef.current = 1;
   }, [stopLoop]);
 
@@ -101,6 +116,10 @@ export function FuzzPanel() {
     if (!Number.isFinite(seed)) return;
     setRepro({ seed, fails: runFuzzCase(seed) });
   }, [seedInput]);
+
+  const sanityCheck = useCallback(() => {
+    setSanity(runSanityCheck());
+  }, []);
 
   const ok = !report || report.ok;
   const allGreen = ok && failedTotal === 0;
@@ -114,7 +133,9 @@ export function FuzzPanel() {
             Each scenario invents 12 players with random picks across <em>every</em> category
             and a random set of results, then grades everyone two ways — the real engine and a
             separate, independently-written rulebook calculator. If they ever disagree, the
-            exact case is shown below so the engine can be fixed.
+            exact case is shown below so the engine can be fixed. It runs entirely in your
+            browser (no AI, no server) — that&apos;s why thousands of cases finish in
+            milliseconds. &ldquo;Pass&rdquo; means the two agreed exactly.
           </p>
         </div>
         <div
@@ -146,14 +167,14 @@ export function FuzzPanel() {
             disabled={running}
             className="rounded-full border border-lime/50 px-4 py-1.5 text-sm font-semibold text-lime transition-colors hover:bg-lime/10 disabled:opacity-50"
           >
-            ▶ Keep looping
+            ▶ Run continuously
           </button>
         ) : (
           <button
             onClick={stopLoop}
             className="rounded-full border border-red/50 px-4 py-1.5 text-sm font-semibold text-red transition-colors hover:bg-red/10"
           >
-            ■ Stop loop
+            ■ Stop
           </button>
         )}
         <button
@@ -163,9 +184,18 @@ export function FuzzPanel() {
           Reset
         </button>
         <span className="tnum ml-auto font-mono text-xs text-dim">
-          {total.toLocaleString()} scenarios run{looping ? " · looping…" : ""}
+          {total.toLocaleString()} scenarios run{looping ? " · running…" : ""}
         </span>
       </div>
+
+      {/* timing — makes the speed transparent (it's your CPU doing the work) */}
+      {perf && (
+        <div className="mt-2 font-mono text-[11px] text-dim">
+          last batch: {BATCH.toLocaleString()} scenarios ({(BATCH * 12).toLocaleString()} player
+          gradings) in {perf.ms.toFixed(0)} ms ·{" "}
+          <span className="text-mut">{perf.rate.toLocaleString()} scenarios/sec on this device</span>
+        </div>
+      )}
 
       {/* result */}
       {report && (
@@ -194,6 +224,49 @@ export function FuzzPanel() {
           )}
         </div>
       )}
+
+      {/* self-test: prove the checker isn't rigged to always say "pass" */}
+      <div className="mt-5 border-t border-line/60 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-mono text-[11px] uppercase tracking-wider text-mut">
+              Prove it can catch a bug
+            </div>
+            <p className="mt-1 max-w-xl text-xs text-dim">
+              Plants a deliberate 1-point error in every grading and checks the detector flags it.
+              If &ldquo;pass&rdquo; were free, this would catch nothing.
+            </p>
+          </div>
+          <button
+            onClick={sanityCheck}
+            className="rounded-full border border-line px-4 py-1.5 text-sm text-ink transition-colors hover:bg-panel2"
+          >
+            Run self-test
+          </button>
+        </div>
+        {sanity && (
+          <div
+            className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+              sanity.ok ? "border-lime/30 bg-lime/5 text-lime" : "border-red/50 bg-red/10 text-red"
+            }`}
+          >
+            {sanity.ok ? "✓ " : "✗ "}
+            Planted a +1 error in all{" "}
+            <span className="tnum font-bold">{sanity.planted.toLocaleString()}</span> gradings
+            ({sanity.scenarios} scenarios) → detector flagged{" "}
+            <span className="tnum font-bold">{sanity.caught.toLocaleString()}</span>
+            {sanity.ok
+              ? " (100%). The check is real."
+              : " — detector missed some; investigate."}
+            {sanity.sample && (
+              <span className="block font-mono text-[11px] text-mut">
+                e.g. seed {sanity.sample.seed}, player {sanity.sample.player}: correct{" "}
+                {sanity.sample.clean} → tampered {sanity.sample.tampered} (flagged)
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* reproduce a specific seed (the correct-and-improve loop) */}
       <div className="mt-5 border-t border-line/60 pt-4">

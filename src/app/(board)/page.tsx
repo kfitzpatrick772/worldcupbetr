@@ -10,6 +10,8 @@ import {
 import type { MatchView } from "@/lib/queries";
 import { Flag, Movement, RankBadge, ScoreCell, StatusBadge } from "@/components/ui";
 import { Countdown } from "@/components/Countdown";
+import { LiveMinute } from "@/components/LiveMinute";
+import { AddToHomeScreen } from "@/components/AddToHomeScreen";
 import { formatKickoff, formatTimeET, stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +139,8 @@ export default async function LeaderboardPage() {
       </p>
         </div>
       )}
+
+      <AddToHomeScreen />
     </div>
   );
 }
@@ -242,7 +246,12 @@ function MatchdayCard({ m }: { m: MatchView }) {
     >
       <div className="mb-2.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-mut">
         <span>{stageLabel(m.stage, m.group)}</span>
-        {live || m.status === "FINISHED" ? (
+        {live ? (
+          <span className="flex items-center gap-1.5 text-red">
+            <StatusBadge status="LIVE" />
+            <LiveMinute kickoffMs={m.kickoff.getTime()} />
+          </span>
+        ) : m.status === "FINISHED" ? (
           <StatusBadge status={m.status} />
         ) : (
           <span>{formatTimeET(m.kickoff)}</span>

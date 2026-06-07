@@ -13,8 +13,14 @@
 // player, and the exact category that diverged, which is what you need to fix
 // the engine. Add a failing seed to REGRESSION_SEEDS so it's checked forever.
 //
-// Pure + dependency-light (only the engine + types) so it runs in the browser
-// for an instant "learning loop", and in Vitest for CI.
+// This is NOT machine learning. There is no model, no training, no automatic
+// "improvement" of the engine. The only thing that persists is REGRESSION_SEEDS
+// (failed cases re-checked forever); fixing the engine is a human reading the
+// pinpointed case. The value is brute force: thousands of independent random
+// cases, each cross-checked, catch bugs no hand-written test thought to.
+//
+// Pure + dependency-light (only the engine + types) so it runs entirely in the
+// browser (no server, no DB, no network — hence the speed) and in Vitest for CI.
 
 import { scoreParticipant } from "./engine";
 import type {
@@ -463,6 +469,43 @@ export interface FuzzReport {
   firstFailure: FuzzFailure | null;
   byCategory: Record<string, number>; // failures grouped by category
   failingSeeds: number[]; // up to a handful, for adding to REGRESSION_SEEDS
+}
+
+// ---------------------------------------------------------------------------
+// Meta-test: prove the checker actually has teeth. We take the real engine's
+// result for each player, deliberately add 1 point to it (a planted "bug"), and
+// run it through the same comparison. If the checker is real it flags EVERY
+// planted error; if it were rigged to always say "pass", it would flag none.
+// ---------------------------------------------------------------------------
+export interface SanityReport {
+  scenarios: number;
+  planted: number; // gradings we deliberately corrupted (+1 pt each)
+  caught: number; // how many the checker flagged
+  ok: boolean; // caught === planted (detector works)
+  sample: { seed: number; player: number; clean: number; tampered: number } | null;
+}
+
+export function runSanityCheck(iterations = 300, baseSeed = 7, players = 12): SanityReport {
+  let planted = 0;
+  let caught = 0;
+  let sample: SanityReport["sample"] = null;
+
+  for (let i = 0; i < iterations; i++) {
+    const seed = ((baseSeed >>> 0) + i * 0x9e3779b1) >>> 0;
+    const scenario = generateScenario(seed, players);
+    const matchesById = new Map(scenario.matches.map((m) => [m.id, m]));
+    scenario.players.forEach((p, pi) => {
+      const engine = scoreParticipant(p, matchesById, scenario.actuals);
+      const oracle = oracleScore(p, matchesById, scenario.actuals);
+      const tampered = engine.livePoints + 1; // plant a 1-point grading error
+      planted++;
+      if (tampered !== oracle.totalLive) {
+        caught++;
+        if (!sample) sample = { seed, player: pi, clean: engine.livePoints, tampered };
+      }
+    });
+  }
+  return { scenarios: iterations, planted, caught, ok: caught === planted && planted > 0, sample };
 }
 
 export function runFuzz(iterations: number, baseSeed: number, players = 12): FuzzReport {

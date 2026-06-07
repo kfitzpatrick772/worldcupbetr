@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Anton, Spline_Sans, Spline_Sans_Mono } from "next/font/google";
+import { RegisterSW } from "@/components/RegisterSW";
 import "./globals.css";
 
 // Display / headline face (single weight).
@@ -28,6 +29,13 @@ export const metadata: Metadata = {
   title: "2026 World Cup Bracket",
   description:
     "Live leaderboard and bracket for our 2026 World Cup pool — scores update automatically after every match.",
+  applicationName: "2026 WC",
+  // Installs to the home screen as a standalone app named "2026 WC".
+  appleWebApp: { capable: true, title: "2026 WC", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#080b0a",
 };
 
 export default function RootLayout({
@@ -40,7 +48,10 @@ export default function RootLayout({
       lang="en"
       className={`${anton.variable} ${splineSans.variable} ${splineSansMono.variable}`}
     >
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        <RegisterSW />
+        {children}
+      </body>
     </html>
   );
 }

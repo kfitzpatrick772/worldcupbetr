@@ -10,6 +10,7 @@ const TABS = [
   { href: "/admin/knockout", label: "Knockout" },
   { href: "/admin/bracket", label: "Bracket" },
   { href: "/admin/results", label: "Results" },
+  { href: "/admin/scoring", label: "Scoring" },
 ];
 
 export function AdminNav() {

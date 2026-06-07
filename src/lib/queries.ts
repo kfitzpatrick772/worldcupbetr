@@ -264,26 +264,31 @@ export type GroupBreakdown = {
 
 /** Full player profile: stats bar + per-group breakdown + category totals. */
 export async function getPlayerProfile(slug: string) {
-  const p = await prisma.participant.findUnique({
-    where: { slug },
-    include: {
-      standing: true,
-      groupStandingPicks: { include: { team: { select: { name: true, flag: true } } } },
-      groupMatchPicks: {
-        include: { match: { select: { group: true, status: true, homeScore: true, awayScore: true } } },
-      },
-      bestThirdPicks: { include: { team: { select: { name: true, flag: true } } } },
-      finalPick: {
-        include: {
-          championTeam: { select: { name: true, flag: true } },
-          runnerUpTeam: { select: { name: true, flag: true } },
-          thirdPlaceTeam: { select: { name: true, flag: true } },
+  const [p, bestThirdActuals] = await Promise.all([
+    prisma.participant.findUnique({
+      where: { slug },
+      include: {
+        standing: true,
+        groupStandingPicks: { include: { team: { select: { name: true, flag: true } } } },
+        groupMatchPicks: {
+          include: { match: { select: { group: true, status: true, homeScore: true, awayScore: true } } },
         },
+        bestThirdPicks: { include: { team: { select: { name: true, flag: true } } } },
+        finalPick: {
+          include: {
+            championTeam: { select: { name: true, flag: true } },
+            runnerUpTeam: { select: { name: true, flag: true } },
+            thirdPlaceTeam: { select: { name: true, flag: true } },
+          },
+        },
+        scoreLines: true,
       },
-      scoreLines: true,
-    },
-  });
+    }),
+    prisma.bestThirdActual.findMany({ select: { teamId: true } }),
+  ]);
   if (!p) return null;
+  const actualThirds = new Set(bestThirdActuals.map((b) => b.teamId));
+  const bestThirdsDecided = actualThirds.size > 0;
 
   const ptsByGroup = new Map<string, number>();
   const byCategory = new Map<string, number>();
@@ -348,7 +353,12 @@ export async function getPlayerProfile(slug: string) {
     byGroup,
     categories: [...byCategory.entries()],
     finalPick: p.finalPick,
-    bestThirds: p.bestThirdPicks.map((b) => b.team),
+    bestThirds: p.bestThirdPicks.map((b) => ({
+      name: b.team.name,
+      flag: b.team.flag,
+      correct: actualThirds.has(b.teamId),
+    })),
+    bestThirdsDecided,
   };
 }
 

@@ -3,6 +3,7 @@ import { runSelfCheck } from "@/lib/scoring/selfcheck";
 import { verifyScoring } from "@/lib/scoring/verify";
 import { POINTS } from "@/lib/scoring/engine";
 import { formatKickoff } from "@/lib/format";
+import { FuzzPanel } from "./FuzzPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,9 @@ export default async function ScoringPage() {
           <div className="mt-3 font-mono text-xs text-dim">last settled {formatKickoff(v.lastSettledAt)}</div>
         )}
       </div>
+
+      {/* 0. Randomized eval loop (clickable property test) */}
+      <FuzzPanel />
 
       {/* 1. Engine evals (rulebook worked examples) */}
       <h2 className="mb-2 font-display text-xl text-ink">Rule evals (engine vs rulebook)</h2>

@@ -14,7 +14,7 @@ export default async function PlayerPage({
   const { slug } = await params;
   const [data, appState] = await Promise.all([getPlayerProfile(slug), getAppState()]);
   if (!data) notFound();
-  const { participant, standing, stats, byGroup, categories, finalPick, bestThirds } = data;
+  const { participant, standing, stats, byGroup, categories, finalPick, bestThirds, bestThirdsDecided } = data;
   // Group picks reveal at the group lock; knockout/final picks at the knockout lock.
   const groupRevealed = appState.picksLocked;
   const koRevealed = appState.knockoutLocked;
@@ -92,6 +92,35 @@ export default async function PlayerPage({
         ))}
       </div>
 
+      {/* Best third-place picks (8) */}
+      <div className="mb-1 mt-8 flex items-baseline justify-between">
+        <h2 className="font-display text-2xl text-ink">Best third-place picks</h2>
+        {bestThirdsDecided && groupRevealed && bestThirds.length > 0 && (
+          <span className="tnum font-mono text-xs text-mut">
+            {bestThirds.filter((b) => b.correct).length}/{bestThirds.length} correct
+          </span>
+        )}
+      </div>
+      <p className="mb-3 text-sm text-mut">
+        The 8 third-placed teams predicted to advance — 5 points each.
+      </p>
+      <div className="rounded-2xl border border-line bg-panel p-4">
+        {bestThirds.length === 0 ? (
+          <p className="text-sm text-mut">Entered with the group-stage picks.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {bestThirds.map((b, i) => (
+              <ThirdChip
+                key={i}
+                team={b}
+                blurred={!groupRevealed}
+                decided={bestThirdsDecided}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Knockout & final */}
       <h2 className="mb-3 mt-8 font-display text-2xl text-ink">Knockout &amp; final</h2>
       <div className="rounded-2xl border border-line bg-panel p-4">
@@ -106,7 +135,6 @@ export default async function PlayerPage({
         )}
         <div className="mt-3 border-t border-line/60 pt-3 font-mono text-xs text-mut">
           Knockout points so far: <span className="font-bold text-lime">{knockoutPts}</span>
-          {bestThirds.length > 0 && <> · {bestThirds.length} best-third picks</>}
         </div>
       </div>
 
@@ -183,6 +211,42 @@ function PickRow({
         </span>
       )}
     </div>
+  );
+}
+
+function ThirdChip({
+  team,
+  blurred,
+  decided,
+}: {
+  team: { name: string; flag: string; correct: boolean };
+  blurred?: boolean;
+  decided?: boolean;
+}) {
+  if (blurred) {
+    return (
+      <span className="flex items-center rounded-xl border border-line bg-bg/40 px-3 py-2">
+        <span className="sr-only">Hidden until kickoff</span>
+        <span className="inline-block h-4 w-20 rounded bg-mut/25 blur-[2px]" aria-hidden />
+      </span>
+    );
+  }
+  // color/glyph only once the best-thirds are officially decided
+  const tone = !decided ? "text-ink" : team.correct ? "text-lime" : "text-red";
+  return (
+    <span
+      className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium ${tone} ${
+        decided && team.correct ? "border-lime/40 bg-lime/10" : "border-line bg-bg/40"
+      }`}
+    >
+      {decided && (
+        <span aria-hidden className="shrink-0 font-bold">
+          {team.correct ? "✓" : "✗"}
+        </span>
+      )}
+      <Flag flag={team.flag} className="shrink-0 text-base" />
+      <span className="truncate">{team.name}</span>
+    </span>
   );
 }
 

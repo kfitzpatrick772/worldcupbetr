@@ -16,6 +16,14 @@ export async function getAppState() {
   );
 }
 
+export type Buckets = {
+  group: number; // group-match scorelines
+  advance: number; // top-2 + winner/runner-up bonuses
+  thirds: number; // best third-place
+  knockout: number; // R16/QF/SF/Final advancement
+  final: number; // champion + runner-up + third-place winner
+};
+
 export type LeaderRow = {
   participantId: string;
   name: string;
@@ -25,13 +33,47 @@ export type LeaderRow = {
   prevRank: number | null;
   maxPossible: number;
   movement: number; // prevRank - rank (positive = climbed)
+  buckets: Buckets;
+};
+
+// Which scoring categories roll up into each leaderboard column.
+const BUCKET_OF: Record<string, keyof Buckets> = {
+  GROUP_MATCH: "group",
+  GROUP_ADVANCE: "advance",
+  GROUP_WINNER_BONUS: "advance",
+  GROUP_RUNNERUP_BONUS: "advance",
+  BEST_THIRD: "thirds",
+  ADVANCE_R16: "knockout",
+  ADVANCE_QF: "knockout",
+  ADVANCE_SF: "knockout",
+  ADVANCE_FINAL: "knockout",
+  CHAMPION: "final",
+  RUNNERUP: "final",
+  THIRD_PLACE: "final",
 };
 
 export async function getLeaderboard(): Promise<LeaderRow[]> {
-  const standings = await prisma.standing.findMany({
-    include: { participant: true },
-    orderBy: [{ rank: "asc" }, { participant: { name: "asc" } }],
-  });
+  const [standings, grouped] = await Promise.all([
+    prisma.standing.findMany({
+      include: { participant: true },
+      orderBy: [{ rank: "asc" }, { participant: { name: "asc" } }],
+    }),
+    prisma.scoreLine.groupBy({
+      by: ["participantId", "category"],
+      _sum: { points: true },
+    }),
+  ]);
+
+  const bucketsByP = new Map<string, Buckets>();
+  for (const g of grouped) {
+    const b =
+      bucketsByP.get(g.participantId) ??
+      { group: 0, advance: 0, thirds: 0, knockout: 0, final: 0 };
+    const key = BUCKET_OF[g.category];
+    if (key) b[key] += g._sum.points ?? 0;
+    bucketsByP.set(g.participantId, b);
+  }
+
   return standings.map((s) => ({
     participantId: s.participantId,
     name: s.participant.name,
@@ -41,6 +83,9 @@ export async function getLeaderboard(): Promise<LeaderRow[]> {
     prevRank: s.prevRank,
     maxPossible: s.maxPossible,
     movement: s.prevRank == null ? 0 : s.prevRank - s.rank,
+    buckets:
+      bucketsByP.get(s.participantId) ??
+      { group: 0, advance: 0, thirds: 0, knockout: 0, final: 0 },
   }));
 }
 

@@ -5,6 +5,14 @@ import { formatKickoff } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const BUCKET_META = [
+  { key: "group", short: "GRP", label: "Group matches" },
+  { key: "advance", short: "ADV", label: "Group advancement" },
+  { key: "thirds", short: "3RD", label: "Best thirds" },
+  { key: "knockout", short: "KO", label: "Knockout rounds" },
+  { key: "final", short: "FIN", label: "Final / champion" },
+] as const;
+
 export default async function LeaderboardPage() {
   const [leaderboard, appState] = await Promise.all([
     getLeaderboard(),
@@ -50,30 +58,63 @@ export default async function LeaderboardPage() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-line">
-        <div className="grid grid-cols-[auto_1fr_auto_auto] gap-3 border-b border-line bg-panel px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-mut">
-          <span>#</span>
-          <span>Player</span>
-          <span className="text-right">Max</span>
-          <span className="text-right">Pts</span>
+        {/* header — bucket columns appear on sm+; mobile shows chips per row */}
+        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-mut">
+          <span className="w-7">#</span>
+          <span className="flex-1">Player</span>
+          {BUCKET_META.map((b) => (
+            <span key={b.key} className="hidden w-9 text-right sm:block" title={b.label}>
+              {b.short}
+            </span>
+          ))}
+          <span className="hidden w-10 text-right sm:block">Max</span>
+          <span className="w-12 text-right">Pts</span>
         </div>
         {leaderboard.map((r) => (
           <Link
             key={r.participantId}
             href={`/players/${r.slug}`}
-            className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 border-b border-line/60 px-4 py-3 transition-colors last:border-0 hover:bg-panel2"
+            className="flex items-center gap-2 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2"
           >
-            <RankBadge rank={r.rank} />
-            <span className="flex items-center gap-2 truncate">
-              <span className="truncate font-medium text-ink">{r.name}</span>
-              <Movement value={r.movement} />
+            <span className="w-7 shrink-0">
+              <RankBadge rank={r.rank} />
             </span>
-            <span className="tnum text-right text-xs text-dim">{r.maxPossible}</span>
-            <span className="tnum text-right text-lg font-bold text-lime">{r.points}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className="truncate font-medium text-ink">{r.name}</span>
+                <Movement value={r.movement} />
+              </span>
+              {/* mobile breakdown chips (non-zero) */}
+              <span className="mt-1 flex flex-wrap gap-1 sm:hidden">
+                {BUCKET_META.filter((b) => r.buckets[b.key] > 0).map((b) => (
+                  <span
+                    key={b.key}
+                    className="tnum rounded bg-panel2 px-1.5 py-0.5 text-[10px] text-mut"
+                  >
+                    {b.short} {r.buckets[b.key]}
+                  </span>
+                ))}
+              </span>
+            </span>
+            {BUCKET_META.map((b) => (
+              <span
+                key={b.key}
+                className={`tnum hidden w-9 text-right text-sm sm:block ${
+                  r.buckets[b.key] > 0 ? "text-ink" : "text-dim"
+                }`}
+              >
+                {r.buckets[b.key]}
+              </span>
+            ))}
+            <span className="tnum hidden w-10 text-right text-xs text-dim sm:block">
+              {r.maxPossible}
+            </span>
+            <span className="tnum w-12 text-right text-lg font-bold text-lime">{r.points}</span>
           </Link>
         ))}
       </div>
       <p className="mt-3 text-center font-mono text-[11px] text-dim">
-        Tap a player to see their full bracket · Max = highest still reachable
+        GRP group · ADV advance · 3RD thirds · KO knockout · FIN final · Max = highest still reachable
       </p>
     </div>
   );

@@ -10,7 +10,6 @@ export default async function PicksListPage() {
     orderBy: { name: "asc" },
     include: {
       _count: { select: { groupMatchPicks: true, groupStandingPicks: true, bestThirdPicks: true } },
-      finalPick: { select: { id: true } },
     },
   });
 
@@ -28,7 +27,9 @@ export default async function PicksListPage() {
         <div className="grid gap-2 sm:grid-cols-2">
           {players.map((p) => {
             const complete =
-              p._count.groupStandingPicks >= 24 && p._count.bestThirdPicks >= 8 && !!p.finalPick;
+              p._count.groupMatchPicks >= 72 &&
+              p._count.groupStandingPicks >= 24 &&
+              p._count.bestThirdPicks >= 8;
             return (
               <Link
                 key={p.id}
@@ -41,7 +42,7 @@ export default async function PicksListPage() {
                     complete ? "bg-lime/15 text-lime" : "bg-panel2 text-mut"
                   }`}
                 >
-                  {complete ? "Complete" : `${p._count.groupMatchPicks}/72 matches`}
+                  {complete ? "Group stage complete" : `${p._count.groupMatchPicks}/72 matches`}
                 </span>
               </Link>
             );

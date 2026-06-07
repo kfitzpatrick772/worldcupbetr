@@ -10,8 +10,14 @@ export default async function ParticipantsPage() {
   const players = await prisma.participant.findMany({
     orderBy: { name: "asc" },
     include: {
-      _count: { select: { groupMatchPicks: true, groupStandingPicks: true, bestThirdPicks: true } },
-      finalPick: { select: { id: true } },
+      _count: {
+        select: {
+          groupMatchPicks: true,
+          groupStandingPicks: true,
+          bestThirdPicks: true,
+          knockoutPicks: true,
+        },
+      },
     },
   });
 
@@ -37,10 +43,11 @@ export default async function ParticipantsPage() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line">
           {players.map((p) => {
-            const complete =
+            const groupComplete =
+              p._count.groupMatchPicks >= 72 &&
               p._count.groupStandingPicks >= 24 &&
-              p._count.bestThirdPicks >= 8 &&
-              !!p.finalPick;
+              p._count.bestThirdPicks >= 8;
+            const koComplete = p._count.knockoutPicks >= 32;
             return (
               <div
                 key={p.id}
@@ -49,23 +56,30 @@ export default async function ParticipantsPage() {
                 <div className="min-w-0">
                   <div className="truncate font-medium text-ink">{p.name}</div>
                   <div className="font-mono text-[10px] text-dim">
-                    {p._count.groupMatchPicks} match · {p._count.groupStandingPicks} standings ·{" "}
-                    {p._count.bestThirdPicks} thirds {p.finalPick ? "· final" : ""}
+                    {p._count.groupMatchPicks}/72 match · {p._count.groupStandingPicks}/24 standings ·{" "}
+                    {p._count.bestThirdPicks}/8 thirds · {p._count.knockoutPicks}/32 knockout
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span
                     className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase ${
-                      complete ? "bg-lime/15 text-lime" : "bg-panel2 text-mut"
+                      groupComplete ? "bg-lime/15 text-lime" : "bg-panel2 text-mut"
                     }`}
                   >
-                    {complete ? "Complete" : "Incomplete"}
+                    {groupComplete ? "Group stage complete" : "Group stage incomplete"}
+                  </span>
+                  <span
+                    className={`hidden rounded-full px-2 py-0.5 font-mono text-[10px] uppercase sm:inline ${
+                      koComplete ? "bg-lime/15 text-lime" : "bg-panel2 text-dim"
+                    }`}
+                  >
+                    {koComplete ? "Knockout in" : "Knockout pending"}
                   </span>
                   <Link
                     href={`/admin/picks/${p.slug}`}
                     className="rounded-lg border border-line px-3 py-1 text-xs text-ink hover:bg-panel2"
                   >
-                    Edit picks
+                    Edit
                   </Link>
                   <form action={deleteParticipant}>
                     <input type="hidden" name="id" value={p.id} />

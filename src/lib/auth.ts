@@ -51,14 +51,25 @@ export function verifyToken(token: string | undefined): boolean {
   }
 }
 
-/** Constant-time check of the submitted password against ADMIN_PASSWORD. */
+/**
+ * Constant-time check against ADMIN_PASSWORD. Supports MULTIPLE passwords
+ * (comma- or newline-separated) so each admin (you + the league owner) can have
+ * their own and rotate independently. Avoid commas inside a password.
+ */
 export function checkPassword(submitted: string): boolean {
-  const expected = process.env.ADMIN_PASSWORD ?? "";
-  if (!expected) return false;
-  // hash both to fixed length so timingSafeEqual never throws on length mismatch
+  const candidates = (process.env.ADMIN_PASSWORD ?? "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (candidates.length === 0) return false;
+  // hash to fixed length so timingSafeEqual never throws; check all (no early return)
   const a = createHmac("sha256", secret()).update(submitted).digest();
-  const b = createHmac("sha256", secret()).update(expected).digest();
-  return timingSafeEqual(a, b);
+  let ok = false;
+  for (const c of candidates) {
+    const b = createHmac("sha256", secret()).update(c).digest();
+    if (timingSafeEqual(a, b)) ok = true;
+  }
+  return ok;
 }
 
 /** Read the current session (cached per render). */

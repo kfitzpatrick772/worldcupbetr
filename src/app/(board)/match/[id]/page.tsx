@@ -31,15 +31,19 @@ export default async function MatchPage({
         </div>
         <div className="flex items-center justify-center gap-4">
           <div className="flex flex-1 flex-col items-center gap-1 text-center">
-            <Flag flag={m.home?.flag ?? "🏳️"} className="text-4xl" />
-            <span className="text-sm font-medium text-ink">{m.home?.name ?? "TBD"}</span>
+            <Flag flag={m.home?.flag ?? "🏟️"} className="text-4xl" />
+            <span className={`text-sm font-medium ${m.home ? "text-ink" : "text-dim"}`}>
+              {m.home?.name ?? m.homeSource ?? "TBD"}
+            </span>
           </div>
           <div className="px-2 text-center text-3xl">
             <ScoreCell m={m} />
           </div>
           <div className="flex flex-1 flex-col items-center gap-1 text-center">
-            <Flag flag={m.away?.flag ?? "🏳️"} className="text-4xl" />
-            <span className="text-sm font-medium text-ink">{m.away?.name ?? "TBD"}</span>
+            <Flag flag={m.away?.flag ?? "🏟️"} className="text-4xl" />
+            <span className={`text-sm font-medium ${m.away ? "text-ink" : "text-dim"}`}>
+              {m.away?.name ?? m.awaySource ?? "TBD"}
+            </span>
           </div>
         </div>
         <div className="mt-3 text-center font-mono text-[11px] text-dim">

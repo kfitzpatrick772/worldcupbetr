@@ -1,0 +1,226 @@
+[
+  {
+    "slotLabel": "M73",
+    "stage": "R32",
+    "kickoff": "2026-06-28T20:00:00Z",
+    "homeSource": "2A",
+    "awaySource": "2B"
+  },
+  {
+    "slotLabel": "M74",
+    "stage": "R32",
+    "kickoff": "2026-06-29T20:00:00Z",
+    "homeSource": "1E",
+    "awaySource": "3rd A/B/C/D/F"
+  },
+  {
+    "slotLabel": "M75",
+    "stage": "R32",
+    "kickoff": "2026-06-29T20:00:00Z",
+    "homeSource": "1F",
+    "awaySource": "2C"
+  },
+  {
+    "slotLabel": "M76",
+    "stage": "R32",
+    "kickoff": "2026-06-29T20:00:00Z",
+    "homeSource": "1C",
+    "awaySource": "2F"
+  },
+  {
+    "slotLabel": "M77",
+    "stage": "R32",
+    "kickoff": "2026-06-30T20:00:00Z",
+    "homeSource": "1I",
+    "awaySource": "3rd C/D/F/G/H"
+  },
+  {
+    "slotLabel": "M78",
+    "stage": "R32",
+    "kickoff": "2026-06-30T20:00:00Z",
+    "homeSource": "2E",
+    "awaySource": "2I"
+  },
+  {
+    "slotLabel": "M79",
+    "stage": "R32",
+    "kickoff": "2026-06-30T20:00:00Z",
+    "homeSource": "1A",
+    "awaySource": "3rd C/E/F/H/I"
+  },
+  {
+    "slotLabel": "M80",
+    "stage": "R32",
+    "kickoff": "2026-07-01T20:00:00Z",
+    "homeSource": "1L",
+    "awaySource": "3rd E/H/I/J/K"
+  },
+  {
+    "slotLabel": "M81",
+    "stage": "R32",
+    "kickoff": "2026-07-01T20:00:00Z",
+    "homeSource": "1D",
+    "awaySource": "3rd B/E/F/I/J"
+  },
+  {
+    "slotLabel": "M82",
+    "stage": "R32",
+    "kickoff": "2026-07-01T20:00:00Z",
+    "homeSource": "1G",
+    "awaySource": "3rd A/E/H/I/J"
+  },
+  {
+    "slotLabel": "M83",
+    "stage": "R32",
+    "kickoff": "2026-07-02T20:00:00Z",
+    "homeSource": "2K",
+    "awaySource": "2L"
+  },
+  {
+    "slotLabel": "M84",
+    "stage": "R32",
+    "kickoff": "2026-07-02T20:00:00Z",
+    "homeSource": "1H",
+    "awaySource": "2J"
+  },
+  {
+    "slotLabel": "M85",
+    "stage": "R32",
+    "kickoff": "2026-07-02T20:00:00Z",
+    "homeSource": "1B",
+    "awaySource": "3rd E/F/G/I/J"
+  },
+  {
+    "slotLabel": "M86",
+    "stage": "R32",
+    "kickoff": "2026-07-03T20:00:00Z",
+    "homeSource": "1J",
+    "awaySource": "2H"
+  },
+  {
+    "slotLabel": "M87",
+    "stage": "R32",
+    "kickoff": "2026-07-03T20:00:00Z",
+    "homeSource": "1K",
+    "awaySource": "3rd D/E/I/J/L"
+  },
+  {
+    "slotLabel": "M88",
+    "stage": "R32",
+    "kickoff": "2026-07-03T20:00:00Z",
+    "homeSource": "2D",
+    "awaySource": "2G"
+  },
+  {
+    "slotLabel": "M89",
+    "stage": "R16",
+    "kickoff": "2026-07-04T20:00:00Z",
+    "homeSource": "W74",
+    "awaySource": "W77"
+  },
+  {
+    "slotLabel": "M90",
+    "stage": "R16",
+    "kickoff": "2026-07-04T20:00:00Z",
+    "homeSource": "W73",
+    "awaySource": "W75"
+  },
+  {
+    "slotLabel": "M91",
+    "stage": "R16",
+    "kickoff": "2026-07-05T20:00:00Z",
+    "homeSource": "W76",
+    "awaySource": "W78"
+  },
+  {
+    "slotLabel": "M92",
+    "stage": "R16",
+    "kickoff": "2026-07-05T20:00:00Z",
+    "homeSource": "W79",
+    "awaySource": "W80"
+  },
+  {
+    "slotLabel": "M93",
+    "stage": "R16",
+    "kickoff": "2026-07-06T20:00:00Z",
+    "homeSource": "W83",
+    "awaySource": "W84"
+  },
+  {
+    "slotLabel": "M94",
+    "stage": "R16",
+    "kickoff": "2026-07-06T20:00:00Z",
+    "homeSource": "W81",
+    "awaySource": "W82"
+  },
+  {
+    "slotLabel": "M95",
+    "stage": "R16",
+    "kickoff": "2026-07-07T20:00:00Z",
+    "homeSource": "W86",
+    "awaySource": "W88"
+  },
+  {
+    "slotLabel": "M96",
+    "stage": "R16",
+    "kickoff": "2026-07-07T20:00:00Z",
+    "homeSource": "W85",
+    "awaySource": "W87"
+  },
+  {
+    "slotLabel": "M97",
+    "stage": "QF",
+    "kickoff": "2026-07-09T20:00:00Z",
+    "homeSource": "W89",
+    "awaySource": "W90"
+  },
+  {
+    "slotLabel": "M98",
+    "stage": "QF",
+    "kickoff": "2026-07-10T20:00:00Z",
+    "homeSource": "W93",
+    "awaySource": "W94"
+  },
+  {
+    "slotLabel": "M99",
+    "stage": "QF",
+    "kickoff": "2026-07-11T20:00:00Z",
+    "homeSource": "W91",
+    "awaySource": "W92"
+  },
+  {
+    "slotLabel": "M100",
+    "stage": "QF",
+    "kickoff": "2026-07-11T20:00:00Z",
+    "homeSource": "W95",
+    "awaySource": "W96"
+  },
+  {
+    "slotLabel": "M101",
+    "stage": "SF",
+    "kickoff": "2026-07-14T20:00:00Z",
+    "homeSource": "W97",
+    "awaySource": "W98"
+  },
+  {
+    "slotLabel": "M102",
+    "stage": "SF",
+    "kickoff": "2026-07-15T20:00:00Z",
+    "homeSource": "W99",
+    "awaySource": "W100"
+  },
+  {
+    "slotLabel": "M103",
+    "stage": "THIRD",
+    "kickoff": "2026-07-18T20:00:00Z",
+    "homeSource": "L101",
+    "awaySource": "L102"
+  },
+  {
+    "slotLabel": "M104",
+    "stage": "FINAL",
+    "kickoff": "2026-07-19T20:00:00Z",
+    "homeSource": "W101",
+    "awaySource": "W102"
+  }
+]

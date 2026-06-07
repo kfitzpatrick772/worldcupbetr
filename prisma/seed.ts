@@ -63,6 +63,30 @@ async function main() {
   }
   console.log(`  upserted ${n} fixtures`);
 
+  // Knockout schedule (teams TBD until group stage results / API assign them).
+  type SeedKO = {
+    slotLabel: string;
+    stage: string;
+    kickoff: string;
+    homeSource: string;
+    awaySource: string;
+  };
+  const knockouts = load<SeedKO[]>("knockout-fixtures.json");
+  console.log(`Seeding ${knockouts.length} knockout fixtures...`);
+  for (const k of knockouts) {
+    await prisma.match.upsert({
+      where: { slotLabel: k.slotLabel },
+      create: {
+        slotLabel: k.slotLabel,
+        stage: k.stage as never,
+        kickoff: new Date(k.kickoff),
+        homeSource: k.homeSource,
+        awaySource: k.awaySource,
+      },
+      update: { kickoff: new Date(k.kickoff), homeSource: k.homeSource, awaySource: k.awaySource },
+    });
+  }
+
   // Singletons.
   await prisma.appState.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
   await prisma.finalActual.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });

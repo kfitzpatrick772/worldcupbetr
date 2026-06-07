@@ -60,6 +60,7 @@ model Team {
   groupStandingActuals GroupStandingActual[]
   bestThirdActuals     BestThirdActual[]
   advanceActuals       AdvanceActual[]
+  knockoutPicks        KnockoutPick[]
 
   @@index([group])
 }
@@ -68,7 +69,9 @@ model Match {
   id          String      @id @default(cuid())
   stage       Stage
   group       String? // set for GROUP stage
-  slotLabel   String? // e.g. "R32-1" for knockout wiring/ordering
+  slotLabel   String? @unique // knockout slot e.g. "M73".."M104"
+  homeSource  String? // descriptor when team is TBD, e.g. "2A", "W74", "L101"
+  awaySource  String?
   homeTeamId  String?
   awayTeamId  String?
   kickoff     DateTime
@@ -110,6 +113,7 @@ model Participant {
   groupStandingPicks GroupStandingPick[]
   bestThirdPicks     BestThirdPick[]
   advancePicks       AdvancePick[]
+  knockoutPicks      KnockoutPick[]
   finalPick          FinalPick?
   scoreLines         ScoreLine[]
   standing           Standing?
@@ -177,6 +181,22 @@ model AdvancePick {
 
   @@unique([participantId, round, teamId])
   @@index([participantId, round])
+}
+
+// Phase-2 entry: the admin-entered predicted WINNER of each knockout slot
+// (M73..M104). The source of truth for the editable bracket. AdvancePick sets +
+// FinalPick are DERIVED from these on save, so the scoring engine is unchanged.
+model KnockoutPick {
+  id            String @id @default(cuid())
+  participantId String
+  slotLabel     String // "M73".."M104"
+  teamId        String // predicted winner of that slot
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, slotLabel])
+  @@index([participantId])
 }
 
 // Champion (160), runner-up (40), third-place match winner (40).
@@ -289,10 +309,14 @@ model Standing {
 
 // Singleton (id = 1).
 model AppState {
-  id            Int       @id @default(1)
-  picksLocked   Boolean   @default(false)
-  lockedAt      DateTime?
-  lastSettledAt DateTime?
+  id              Int       @id @default(1)
+  // Phase 1 = group picks (scorelines, standings, best thirds) — lock at kickoff.
+  picksLocked     Boolean   @default(false)
+  lockedAt        DateTime?
+  // Phase 2 = knockout bracket picks — lock at Round-of-32 kickoff.
+  knockoutLocked  Boolean   @default(false)
+  knockoutLockedAt DateTime?
+  lastSettledAt   DateTime?
 }
 
 model SettlementRun {

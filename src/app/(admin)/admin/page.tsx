@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { settleNow, toggleLock } from "@/lib/actions";
+import { settleNow, toggleLock, toggleKnockoutLock } from "@/lib/actions";
 import { formatKickoff } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export default async function AdminDashboard() {
 
   const warnings = (lastRun?.summary as { unresolvedKnockouts?: string[] } | null)?.unresolvedKnockouts ?? [];
   const locked = state?.picksLocked ?? false;
+  const koLocked = state?.knockoutLocked ?? false;
 
   return (
     <div>
@@ -63,12 +64,12 @@ export default async function AdminDashboard() {
 
         <div className="rounded-2xl border border-line bg-panel p-5">
           <h2 className="font-display text-lg text-ink">
-            {locked ? "Picks are locked" : "Picks are open"}
+            Phase 1 · Group picks {locked ? "🔒" : ""}
           </h2>
           <p className="mt-1 text-sm text-mut">
             {locked
-              ? "Picks can no longer be edited. Unlock only to fix an entry error."
-              : "Lock picks at the first kickoff so nothing can change once games start."}
+              ? "Group picks are locked. Unlock only to fix an entry error."
+              : "Lock at the first kickoff (Jun 11) so group picks can't change once games start."}
           </p>
           <form action={toggleLock} className="mt-3">
             <button
@@ -76,7 +77,27 @@ export default async function AdminDashboard() {
                 locked ? "border border-line text-ink hover:bg-panel2" : "bg-gold text-black hover:opacity-90"
               }`}
             >
-              {locked ? "Unlock picks" : "Lock picks"}
+              {locked ? "Unlock group picks" : "Lock group picks"}
+            </button>
+          </form>
+        </div>
+
+        <div className="rounded-2xl border border-line bg-panel p-5">
+          <h2 className="font-display text-lg text-ink">
+            Phase 2 · Knockout picks {koLocked ? "🔒" : ""}
+          </h2>
+          <p className="mt-1 text-sm text-mut">
+            After the group stage, set the bracket on{" "}
+            <Link href="/admin/bracket" className="text-lime">Bracket</Link>, enter each
+            player&apos;s knockout picks, then lock at the Round-of-32 kickoff (Jun 28).
+          </p>
+          <form action={toggleKnockoutLock} className="mt-3">
+            <button
+              className={`rounded-xl px-4 py-2 font-semibold ${
+                koLocked ? "border border-line text-ink hover:bg-panel2" : "bg-gold text-black hover:opacity-90"
+              }`}
+            >
+              {koLocked ? "Unlock knockout picks" : "Lock knockout picks"}
             </button>
           </form>
         </div>
@@ -91,6 +112,12 @@ export default async function AdminDashboard() {
         </Link>
         <Link href="/admin/results" className="rounded-xl border border-line px-4 py-2 text-sm text-ink hover:bg-panel2">
           Enter results →
+        </Link>
+        <Link href="/admin/bracket" className="rounded-xl border border-line px-4 py-2 text-sm text-ink hover:bg-panel2">
+          Set bracket →
+        </Link>
+        <Link href="/admin/knockout" className="rounded-xl border border-line px-4 py-2 text-sm text-ink hover:bg-panel2">
+          Enter knockout picks →
         </Link>
       </div>
 

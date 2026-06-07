@@ -36,15 +36,19 @@ export default async function MatchesPage() {
                     {stageLabel(m.stage, m.group)}
                   </span>
                   <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
-                    <span className="truncate text-sm text-ink">{m.home?.name ?? "TBD"}</span>
-                    <Flag flag={m.home?.flag ?? "🏳️"} className="text-lg" />
+                    <span className={`truncate text-sm ${m.home ? "text-ink" : "text-dim"}`}>
+                      {m.home?.name ?? m.homeSource ?? "TBD"}
+                    </span>
+                    {m.home && <Flag flag={m.home.flag} className="text-lg" />}
                   </span>
                   <span className="w-16 shrink-0 text-center text-sm">
                     <ScoreCell m={m} />
                   </span>
                   <span className="flex flex-1 items-center gap-2 truncate">
-                    <Flag flag={m.away?.flag ?? "🏳️"} className="text-lg" />
-                    <span className="truncate text-sm text-ink">{m.away?.name ?? "TBD"}</span>
+                    {m.away && <Flag flag={m.away.flag} className="text-lg" />}
+                    <span className={`truncate text-sm ${m.away ? "text-ink" : "text-dim"}`}>
+                      {m.away?.name ?? m.awaySource ?? "TBD"}
+                    </span>
                   </span>
                   <span className="w-16 shrink-0 text-right">
                     <StatusBadge status={m.status} />

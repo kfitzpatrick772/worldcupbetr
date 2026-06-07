@@ -48,22 +48,28 @@ export type MatchView = {
   id: string;
   stage: string;
   group: string | null;
+  slotLabel: string | null;
   kickoff: Date;
   status: string;
   homeScore: number | null;
   awayScore: number | null;
   home: { name: string; flag: string; code: string } | null;
   away: { name: string; flag: string; code: string } | null;
+  homeSource: string | null; // descriptor when team TBD ("2A", "Winner M74")
+  awaySource: string | null;
 };
 
 function toView(m: {
   id: string;
   stage: string;
   group: string | null;
+  slotLabel: string | null;
   kickoff: Date;
   status: string;
   homeScore: number | null;
   awayScore: number | null;
+  homeSource: string | null;
+  awaySource: string | null;
   homeTeam: { name: string; flag: string; code: string } | null;
   awayTeam: { name: string; flag: string; code: string } | null;
 }): MatchView {
@@ -71,13 +77,28 @@ function toView(m: {
     id: m.id,
     stage: m.stage,
     group: m.group,
+    slotLabel: m.slotLabel,
     kickoff: m.kickoff,
     status: m.status,
     homeScore: m.homeScore,
     awayScore: m.awayScore,
     home: m.homeTeam,
     away: m.awayTeam,
+    homeSource: prettySource(m.homeSource),
+    awaySource: prettySource(m.awaySource),
   };
+}
+
+// "W74" -> "Winner M74", "L101" -> "Loser M101", "2A" -> "Runner-up A",
+// "1A" -> "Winner A", "3rd A/B/C" -> "3rd: A/B/C"
+function prettySource(s: string | null): string | null {
+  if (!s) return null;
+  if (/^W\d+$/.test(s)) return `Winner M${s.slice(1)}`;
+  if (/^L\d+$/.test(s)) return `Loser M${s.slice(1)}`;
+  if (/^1[A-L]$/.test(s)) return `Winner ${s[1]}`;
+  if (/^2[A-L]$/.test(s)) return `Runner-up ${s[1]}`;
+  if (s.startsWith("3rd")) return s.replace("3rd ", "3rd: ");
+  return s;
 }
 
 export async function getMatches(): Promise<MatchView[]> {

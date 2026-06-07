@@ -103,9 +103,6 @@ export default async function PickEntryPage({
   const standing = new Map(participant.groupStandingPicks.map((s) => [`${s.group}_${s.position}`, s.teamId]));
   const mPick = new Map(participant.groupMatchPicks.map((m) => [m.matchId, m]));
   const thirdSet = new Set(participant.bestThirdPicks.map((b) => b.teamId));
-  const advSet = (round: string) =>
-    new Set(participant.advancePicks.filter((a) => a.round === round).map((a) => a.teamId));
-  const fp = participant.finalPick;
   const locked = state?.picksLocked ?? false;
 
   return (
@@ -195,45 +192,16 @@ export default async function PickEntryPage({
           <CheckGrid name="third" teams={teams} checked={thirdSet} />
         </section>
 
-        {/* Final */}
-        <section className="rounded-2xl border border-line bg-panel p-4">
-          <h2 className="mb-3 font-display text-xl text-ink">Final</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="text-xs text-mut">
-              Champion (160)
-              <TeamSelect name="champion" teams={teams} defaultValue={fp?.championTeamId} placeholder="Champion…" />
-            </label>
-            <label className="text-xs text-mut">
-              Runner-up (40)
-              <TeamSelect name="runnerUp" teams={teams} defaultValue={fp?.runnerUpTeamId} placeholder="Runner-up…" />
-            </label>
-            <label className="text-xs text-mut">
-              3rd-place winner (40)
-              <TeamSelect name="thirdPlace" teams={teams} defaultValue={fp?.thirdPlaceTeamId} placeholder="Third…" />
-            </label>
-          </div>
-        </section>
-
-        {/* Knockout advancers */}
-        <details className="rounded-2xl border border-line bg-panel p-4">
-          <summary className="cursor-pointer font-display text-xl text-ink">
-            Knockout bracket (advancers)
-          </summary>
-          <p className="mt-1 mb-4 text-xs text-mut">
-            Tick the teams you predict to <b>reach</b> each round. Due before the Round of 32.
+        {/* Knockout = phase 2 (after the group stage). */}
+        <section className="rounded-2xl border border-line border-dashed bg-panel/50 p-4">
+          <h2 className="font-display text-xl text-mut">Knockout bracket → Phase 2</h2>
+          <p className="mt-1 text-sm text-dim">
+            Champion, runner-up, third place and all knockout-round picks are
+            entered <b className="text-mut">after the group stage</b>, once the
+            Round-of-32 matchups are set — on the{" "}
+            <span className="text-lime">Knockout</span> tab.
           </p>
-          {[
-            { round: "R16", label: "Reach Round of 16 — pick 16 (10 pts each)" },
-            { round: "QF", label: "Reach Quarter-finals — pick 8 (20 pts each)" },
-            { round: "SF", label: "Reach Semi-finals — pick 4 (40 pts each)" },
-            { round: "FINAL", label: "Reach the Final — pick 2 (80 pts each)" },
-          ].map((r) => (
-            <div key={r.round} className="mb-4">
-              <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-lime">{r.label}</div>
-              <CheckGrid name={`adv_${r.round}`} teams={teams} checked={advSet(r.round)} />
-            </div>
-          ))}
-        </details>
+        </section>
 
         {/* Sticky save */}
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 px-4 py-3 backdrop-blur">

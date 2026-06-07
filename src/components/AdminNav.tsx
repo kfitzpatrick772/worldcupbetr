@@ -6,7 +6,9 @@ import { logout } from "@/lib/actions";
 const TABS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/participants", label: "Players" },
-  { href: "/admin/picks", label: "Picks" },
+  { href: "/admin/picks", label: "Group picks" },
+  { href: "/admin/knockout", label: "Knockout" },
+  { href: "/admin/bracket", label: "Bracket" },
   { href: "/admin/results", label: "Results" },
 ];
 

@@ -67,8 +67,8 @@ export function AddToHomeScreen() {
       </button>
       {showHelp && isIOS && (
         <div className="max-w-xs rounded-xl border border-line bg-panel px-4 py-3 text-center text-xs text-mut">
-          In Safari, tap the <b className="text-ink">Share</b> icon{" "}
-          <span aria-hidden>(the square with an ↑)</span>, then{" "}
+          In Safari, tap the <b className="text-ink">•••</b> button, then{" "}
+          <b className="text-ink">Share</b> <span aria-hidden>(the square with an ↑)</span>, then{" "}
           <b className="text-ink">Add to Home Screen</b>. It saves as the{" "}
           <span className="text-lime">WC</span>
           <span className="text-ink">&apos;26</span> app icon.

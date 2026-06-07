@@ -55,6 +55,17 @@ export function formatKickoff(d: Date): string {
   }).format(d);
 }
 
+/** Time only, in Eastern, e.g. "3:00 PM ET". */
+export function formatTimeET(d: Date): string {
+  return (
+    new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: TZ,
+    }).format(d) + " ET"
+  );
+}
+
 export function formatDay(d: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",

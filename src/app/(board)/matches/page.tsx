@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getMatches } from "@/lib/queries";
 import { Flag, ScoreCell, StatusBadge } from "@/components/ui";
-import { dayKey, formatDay, stageLabel } from "@/lib/format";
+import { dayKey, formatDay, formatTimeET, stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,9 @@ export default async function MatchesPage() {
                   className="block border-b border-line/60 px-3 py-2.5 transition-colors last:border-0 hover:bg-panel2"
                 >
                   <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] uppercase tracking-wider text-dim">
-                    <span>{stageLabel(m.stage, m.group)}</span>
+                    <span>
+                      {stageLabel(m.stage, m.group)} · {formatTimeET(m.kickoff)}
+                    </span>
                     <StatusBadge status={m.status} />
                   </div>
                   <div className="flex items-center gap-2">
@@ -53,6 +55,11 @@ export default async function MatchesPage() {
                       </span>
                     </span>
                   </div>
+                  {m.venue && (
+                    <div className="mt-1.5 truncate text-center font-mono text-[10px] text-dim">
+                      {m.venue}
+                    </div>
+                  )}
                 </Link>
               ))}
             </div>

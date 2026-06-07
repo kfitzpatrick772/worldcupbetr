@@ -51,6 +51,7 @@ export async function applyFixtures(fixtures: FeedFixture[]): Promise<SyncResult
 
     const data: Record<string, unknown> = {};
     if (cur.externalRef !== fx.externalRef) data.externalRef = fx.externalRef;
+    if (fx.venue && cur.venue !== fx.venue) data.venue = fx.venue;
     if (cur.status !== fx.status) data.status = fx.status;
     if (cur.homeScore !== fx.homeScore) data.homeScore = fx.homeScore;
     if (cur.awayScore !== fx.awayScore) data.awayScore = fx.awayScore;

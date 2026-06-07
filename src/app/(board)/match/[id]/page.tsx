@@ -47,7 +47,8 @@ export default async function MatchPage({
           </div>
         </div>
         <div className="mt-3 text-center font-mono text-[11px] text-dim">
-          {formatKickoff(m.kickoff)}
+          {formatKickoff(m.kickoff)} ET
+          {m.venue ? ` · ${m.venue}` : ""}
         </div>
       </div>
 

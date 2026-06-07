@@ -72,6 +72,7 @@ model Match {
   slotLabel   String? @unique // knockout slot e.g. "M73".."M104"
   homeSource  String? // descriptor when team is TBD, e.g. "2A", "W74", "L101"
   awaySource  String?
+  venue       String? // "Stadium, City"
   homeTeamId  String?
   awayTeamId  String?
   kickoff     DateTime

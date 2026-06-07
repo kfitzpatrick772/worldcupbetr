@@ -16,6 +16,7 @@ export interface FeedFixture {
   awayScore: number | null;
   // For knockouts decided after a draw, the provider should name the advancer.
   winnerName?: string | null;
+  venue?: string | null; // "Stadium, City"
 }
 
 export interface ScoreProvider {

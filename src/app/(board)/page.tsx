@@ -1,6 +1,13 @@
 import Link from "next/link";
-import { getAppState, getLeaderboard } from "@/lib/queries";
-import { Movement, RankBadge } from "@/components/ui";
+import {
+  getAppState,
+  getLeaderboard,
+  getOpener,
+  getParticipantCount,
+} from "@/lib/queries";
+import type { MatchView } from "@/lib/queries";
+import { Flag, Movement, RankBadge } from "@/components/ui";
+import { Countdown } from "@/components/Countdown";
 import { formatKickoff } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -14,16 +21,21 @@ const BUCKET_META = [
 ] as const;
 
 export default async function LeaderboardPage() {
-  const [leaderboard, appState] = await Promise.all([
+  const [leaderboard, appState, opener, playerCount] = await Promise.all([
     getLeaderboard(),
     getAppState(),
+    getOpener(),
+    getParticipantCount(),
   ]);
   const lastSettledAt = appState.lastSettledAt;
 
+  // Before the tournament kicks off, show a countdown instead of the board.
+  if (opener && Date.now() < opener.kickoff.getTime()) {
+    return <CountdownView opener={opener} playerCount={playerCount} />;
+  }
+
   if (leaderboard.length === 0) {
-    return (
-      <EmptyState />
-    );
+    return <EmptyState />;
   }
 
   const top = leaderboard[0];
@@ -115,6 +127,58 @@ export default async function LeaderboardPage() {
       </div>
       <p className="mt-3 text-center font-mono text-[11px] text-dim">
         GRP group · ADV advance · 3RD thirds · KO knockout · FIN final · Max = highest still reachable
+      </p>
+    </div>
+  );
+}
+
+function CountdownView({
+  opener,
+  playerCount,
+}: {
+  opener: MatchView;
+  playerCount: number;
+}) {
+  return (
+    <div className="py-6">
+      <div className="mb-3 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.42em] text-lime">
+        <span className="inline-block h-0.5 w-6 bg-lime" /> Kickoff
+      </div>
+      <h1 className="font-display text-4xl text-ink sm:text-6xl">
+        The tournament
+        <br />
+        starts in
+      </h1>
+
+      <div className="mt-7">
+        <Countdown targetMs={opener.kickoff.getTime()} />
+      </div>
+
+      {/* Opener matchup */}
+      <div className="mt-7 rounded-2xl border border-line bg-gradient-to-b from-panel2 to-panel p-5">
+        <div className="mb-3 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-mut">
+          Opening match
+        </div>
+        <div className="flex items-center justify-center gap-4">
+          <span className="flex flex-1 items-center justify-end gap-2 text-right">
+            <span className="font-medium text-ink">{opener.home?.name ?? "TBD"}</span>
+            {opener.home && <Flag flag={opener.home.flag} className="text-2xl" />}
+          </span>
+          <span className="font-mono text-xs text-dim">vs</span>
+          <span className="flex flex-1 items-center gap-2">
+            {opener.away && <Flag flag={opener.away.flag} className="text-2xl" />}
+            <span className="font-medium text-ink">{opener.away?.name ?? "TBD"}</span>
+          </span>
+        </div>
+        <div className="mt-3 text-center font-mono text-[11px] text-dim">
+          {formatKickoff(opener.kickoff)} ET{opener.venue ? ` · ${opener.venue}` : ""}
+        </div>
+      </div>
+
+      <p className="mt-5 text-center text-sm text-mut">
+        {playerCount > 0
+          ? `${playerCount} players locked in — leaderboard goes live at kickoff.`
+          : "Picks are being entered — leaderboard goes live at kickoff."}
       </p>
     </div>
   );

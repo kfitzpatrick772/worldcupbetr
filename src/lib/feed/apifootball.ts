@@ -20,7 +20,12 @@ function mapStatus(short: string): FeedStatus {
 }
 
 interface ApiFixtureRow {
-  fixture: { id: number; date: string; status: { short: string } };
+  fixture: {
+    id: number;
+    date: string;
+    status: { short: string };
+    venue?: { name: string | null; city: string | null };
+  };
   teams: {
     home: { id: number; name: string; winner: boolean | null };
     away: { id: number; name: string; winner: boolean | null };
@@ -49,6 +54,9 @@ export class ApiFootballProvider implements ScoreProvider {
         if (r.teams.home.winner) winnerName = r.teams.home.name;
         else if (r.teams.away.winner) winnerName = r.teams.away.name;
       }
+      const venue = [r.fixture.venue?.name, r.fixture.venue?.city]
+        .filter(Boolean)
+        .join(", ");
       return {
         externalRef: `apifootball:${r.fixture.id}`,
         kickoff: r.fixture.date,
@@ -58,6 +66,7 @@ export class ApiFootballProvider implements ScoreProvider {
         homeScore: r.goals.home,
         awayScore: r.goals.away,
         winnerName,
+        venue: venue || null,
       };
     });
   }

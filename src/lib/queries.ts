@@ -102,6 +102,7 @@ export type MatchView = {
   away: { name: string; flag: string; code: string } | null;
   homeSource: string | null; // descriptor when team TBD ("2A", "Winner M74")
   awaySource: string | null;
+  venue: string | null;
 };
 
 function toView(m: {
@@ -115,6 +116,7 @@ function toView(m: {
   awayScore: number | null;
   homeSource: string | null;
   awaySource: string | null;
+  venue: string | null;
   homeTeam: { name: string; flag: string; code: string } | null;
   awayTeam: { name: string; flag: string; code: string } | null;
 }): MatchView {
@@ -131,6 +133,7 @@ function toView(m: {
     away: m.awayTeam,
     homeSource: prettySource(m.homeSource),
     awaySource: prettySource(m.awaySource),
+    venue: m.venue,
   };
 }
 
@@ -261,4 +264,16 @@ export async function getPlayer(slug: string) {
 
 export async function getParticipantCount() {
   return prisma.participant.count();
+}
+
+/** The tournament opener (earliest match) with teams + venue. */
+export async function getOpener(): Promise<MatchView | null> {
+  const m = await prisma.match.findFirst({
+    orderBy: { kickoff: "asc" },
+    include: {
+      homeTeam: { select: { name: true, flag: true, code: true } },
+      awayTeam: { select: { name: true, flag: true, code: true } },
+    },
+  });
+  return m ? toView(m) : null;
 }

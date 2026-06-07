@@ -13,6 +13,13 @@ type SeedFixture = {
   home: string;
   away: string;
   kickoff: string | null;
+  venue?: string | null;
+};
+
+// Knockout venues we know up front; the rest fill in via the score feed/admin.
+const KO_VENUE: Record<string, string> = {
+  M103: "Hard Rock Stadium, Miami",
+  M104: "MetLife Stadium, New York/New Jersey",
 };
 
 function load<T>(file: string): T {
@@ -56,8 +63,8 @@ async function main() {
           awayTeamId,
         },
       },
-      create: { stage: "GROUP", group: f.group, homeTeamId, awayTeamId, kickoff },
-      update: { kickoff },
+      create: { stage: "GROUP", group: f.group, homeTeamId, awayTeamId, kickoff, venue: f.venue ?? null },
+      update: { kickoff, venue: f.venue ?? null },
     });
     n++;
   }
@@ -82,8 +89,14 @@ async function main() {
         kickoff: new Date(k.kickoff),
         homeSource: k.homeSource,
         awaySource: k.awaySource,
+        venue: KO_VENUE[k.slotLabel] ?? null,
       },
-      update: { kickoff: new Date(k.kickoff), homeSource: k.homeSource, awaySource: k.awaySource },
+      update: {
+        kickoff: new Date(k.kickoff),
+        homeSource: k.homeSource,
+        awaySource: k.awaySource,
+        venue: KO_VENUE[k.slotLabel] ?? null,
+      },
     });
   }
 

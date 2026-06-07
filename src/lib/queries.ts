@@ -56,12 +56,14 @@ const BUCKET_OF: Record<string, keyof Buckets> = {
   THIRD_PLACE: "final",
 };
 
+const zeroBuckets = (): Buckets => ({ group: 0, advance: 0, thirds: 0, knockout: 0, final: 0 });
+
 export async function getLeaderboard(): Promise<LeaderRow[]> {
-  const [standings, grouped] = await Promise.all([
-    prisma.standing.findMany({
-      include: { participant: true },
-      orderBy: [{ rank: "asc" }, { participant: { name: "asc" } }],
-    }),
+  // Drive the board off the Participant table (not Standing) so a player can
+  // never be silently dropped if a settle hasn't created their snapshot yet —
+  // the public list always matches the player count.
+  const [participants, grouped] = await Promise.all([
+    prisma.participant.findMany({ include: { standing: true } }),
     prisma.scoreLine.groupBy({
       by: ["participantId", "category"],
       _sum: { points: true },
@@ -70,27 +72,37 @@ export async function getLeaderboard(): Promise<LeaderRow[]> {
 
   const bucketsByP = new Map<string, Buckets>();
   for (const g of grouped) {
-    const b =
-      bucketsByP.get(g.participantId) ??
-      { group: 0, advance: 0, thirds: 0, knockout: 0, final: 0 };
+    const b = bucketsByP.get(g.participantId) ?? zeroBuckets();
     const key = BUCKET_OF[g.category];
     if (key) b[key] += g._sum.points ?? 0;
     bucketsByP.set(g.participantId, b);
   }
 
-  return standings.map((s) => ({
-    participantId: s.participantId,
-    name: s.participant.name,
-    slug: s.participant.slug,
-    points: s.totalPoints,
-    rank: s.rank,
-    prevRank: s.prevRank,
-    maxPossible: s.maxPossible,
-    movement: s.prevRank == null ? 0 : s.prevRank - s.rank,
-    buckets:
-      bucketsByP.get(s.participantId) ??
-      { group: 0, advance: 0, thirds: 0, knockout: 0, final: 0 },
-  }));
+  const ranked = participants
+    .map((p) => ({
+      participantId: p.id,
+      name: p.name,
+      slug: p.slug,
+      points: p.standing?.totalPoints ?? 0,
+      prevRank: p.standing?.prevRank ?? null,
+      maxPossible: p.standing?.maxPossible ?? 0,
+      buckets: bucketsByP.get(p.id) ?? zeroBuckets(),
+    }))
+    .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+
+  // Assign display ranks (ties share a rank), mirroring the engine.
+  let lastPoints: number | null = null;
+  let lastRank = 0;
+  return ranked.map((r, i) => {
+    const rank = lastPoints === r.points ? lastRank : i + 1;
+    lastPoints = r.points;
+    lastRank = rank;
+    return {
+      ...r,
+      rank,
+      movement: r.prevRank == null ? 0 : r.prevRank - rank,
+    };
+  });
 }
 
 export type MatchView = {

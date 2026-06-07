@@ -94,7 +94,11 @@ export async function createParticipant(formData: FormData) {
   }
   await prisma.participant.create({ data: { name, slug } });
   await audit("create-participant", name);
+  // Settle so the new player immediately gets a Standing snapshot and appears
+  // on the public board (without this they'd be counted but unlisted).
+  await settle("admin");
   revalidatePath("/admin/participants");
+  revalidatePath("/", "layout");
 }
 
 export async function deleteParticipant(formData: FormData) {

@@ -30,29 +30,29 @@ export default async function MatchesPage() {
                 <Link
                   key={m.id}
                   href={`/match/${m.id}`}
-                  className="flex items-center gap-3 border-b border-line/60 px-4 py-3 transition-colors last:border-0 hover:bg-panel2"
+                  className="block border-b border-line/60 px-3 py-2.5 transition-colors last:border-0 hover:bg-panel2"
                 >
-                  <span className="w-20 shrink-0 font-mono text-[10px] uppercase tracking-wider text-dim">
-                    {stageLabel(m.stage, m.group)}
-                  </span>
-                  <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
-                    <span className={`truncate text-sm ${m.home ? "text-ink" : "text-dim"}`}>
-                      {m.home?.name ?? m.homeSource ?? "TBD"}
-                    </span>
-                    {m.home && <Flag flag={m.home.flag} className="text-lg" />}
-                  </span>
-                  <span className="w-16 shrink-0 text-center text-sm">
-                    <ScoreCell m={m} />
-                  </span>
-                  <span className="flex flex-1 items-center gap-2 truncate">
-                    {m.away && <Flag flag={m.away.flag} className="text-lg" />}
-                    <span className={`truncate text-sm ${m.away ? "text-ink" : "text-dim"}`}>
-                      {m.away?.name ?? m.awaySource ?? "TBD"}
-                    </span>
-                  </span>
-                  <span className="w-16 shrink-0 text-right">
+                  <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] uppercase tracking-wider text-dim">
+                    <span>{stageLabel(m.stage, m.group)}</span>
                     <StatusBadge status={m.status} />
-                  </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
+                      <span className={`truncate text-sm ${m.home ? "text-ink" : "text-dim"}`}>
+                        {m.home?.name ?? m.homeSource ?? "TBD"}
+                      </span>
+                      {m.home && <Flag flag={m.home.flag} className="shrink-0 text-lg" />}
+                    </span>
+                    <span className="w-14 shrink-0 text-center text-sm">
+                      <ScoreCell m={m} />
+                    </span>
+                    <span className="flex flex-1 items-center gap-2 truncate">
+                      {m.away && <Flag flag={m.away.flag} className="shrink-0 text-lg" />}
+                      <span className={`truncate text-sm ${m.away ? "text-ink" : "text-dim"}`}>
+                        {m.away?.name ?? m.awaySource ?? "TBD"}
+                      </span>
+                    </span>
+                  </div>
                 </Link>
               ))}
             </div>

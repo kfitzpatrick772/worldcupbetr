@@ -14,9 +14,11 @@
   --color-raised: #1d2a23;
   --color-line: #26342c;
   --color-line2: #324339;
-  --color-ink: #eef4ef;
-  --color-mut: #8a9b91;
-  --color-dim: #5d6e64;
+  /* High-contrast text for readability (incl. older viewers). ink ~ near-white;
+     mut/dim brightened well above WCAG AA on the dark base. */
+  --color-ink: #f6f9f7;
+  --color-mut: #b7c5bd;
+  --color-dim: #93a199;
 
   --color-lime: #b9f73e;
   --color-lime2: #8fd41f;
@@ -40,6 +42,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Gentle global scale-up for readability (proportional: text + spacing). */
+  font-size: 17px;
 }
 
 body {

@@ -75,6 +75,14 @@ export function formatDay(d: Date): string {
   }).format(d);
 }
 
+/** Picks stay hidden until midnight ET on the day of the opening match. */
+export function picksRevealAt(opener: Date): number {
+  return new Date(`${dayKey(opener)}T00:00:00-04:00`).getTime();
+}
+export function picksRevealed(opener: Date | null): boolean {
+  return opener ? Date.now() >= picksRevealAt(opener) : true;
+}
+
 export function dayKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     year: "numeric",

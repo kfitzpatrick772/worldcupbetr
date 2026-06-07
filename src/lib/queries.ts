@@ -4,6 +4,7 @@
 import { prisma } from "./db";
 import { buildTable, computeGroupOrder } from "./scoring/standings";
 import type { FinishedMatch } from "./scoring/standings";
+import { outcomeOf } from "./scoring/engine";
 
 export async function getAppState() {
   return (
@@ -247,19 +248,106 @@ export async function getGroupTables() {
 }
 
 /** Player detail: standing + scorelines grouped by category. */
-export async function getPlayer(slug: string) {
-  const participant = await prisma.participant.findUnique({
+export type TeamMini = { name: string; flag: string };
+export type GroupBreakdown = {
+  group: string;
+  first: TeamMini | null;
+  second: TeamMini | null;
+  earned: number;
+  potential: number;
+  correct: number;
+  decided: number;
+  picks: number;
+};
+
+/** Full player profile: stats bar + per-group breakdown + category totals. */
+export async function getPlayerProfile(slug: string) {
+  const p = await prisma.participant.findUnique({
     where: { slug },
-    include: { standing: true, finalPick: true },
+    include: {
+      standing: true,
+      groupStandingPicks: { include: { team: { select: { name: true, flag: true } } } },
+      groupMatchPicks: {
+        include: { match: { select: { group: true, status: true, homeScore: true, awayScore: true } } },
+      },
+      bestThirdPicks: { include: { team: { select: { name: true, flag: true } } } },
+      finalPick: {
+        include: {
+          championTeam: { select: { name: true, flag: true } },
+          runnerUpTeam: { select: { name: true, flag: true } },
+          thirdPlaceTeam: { select: { name: true, flag: true } },
+        },
+      },
+      scoreLines: true,
+    },
   });
-  if (!participant) return null;
-  const lines = await prisma.scoreLine.findMany({
-    where: { participantId: participant.id },
-    orderBy: { points: "desc" },
-  });
+  if (!p) return null;
+
+  const ptsByGroup = new Map<string, number>();
   const byCategory = new Map<string, number>();
-  for (const l of lines) byCategory.set(l.category, (byCategory.get(l.category) ?? 0) + l.points);
-  return { participant, lines, byCategory: [...byCategory.entries()] };
+  for (const l of p.scoreLines) {
+    if (l.group) ptsByGroup.set(l.group, (ptsByGroup.get(l.group) ?? 0) + l.points);
+    byCategory.set(l.category, (byCategory.get(l.category) ?? 0) + l.points);
+  }
+
+  // overall group-match accuracy
+  let decided = 0;
+  let correct = 0;
+  let exact = 0;
+  for (const mp of p.groupMatchPicks) {
+    const m = mp.match;
+    if (m.status === "FINISHED" && m.homeScore != null && m.awayScore != null) {
+      decided++;
+      if (outcomeOf(m.homeScore, m.awayScore) === outcomeOf(mp.predHome, mp.predAway)) correct++;
+      if (mp.predHome === m.homeScore && mp.predAway === m.awayScore) exact++;
+    }
+  }
+
+  const ALL_GROUPS = "ABCDEFGHIJKL".split("");
+  const firstOf = new Map<string, TeamMini>();
+  const secondOf = new Map<string, TeamMini>();
+  for (const s of p.groupStandingPicks) {
+    (s.position === 1 ? firstOf : secondOf).set(s.group, s.team);
+  }
+
+  const byGroup: GroupBreakdown[] = ALL_GROUPS.map((g) => {
+    const picks = p.groupMatchPicks.filter((mp) => mp.match.group === g);
+    let gDecided = 0;
+    let gCorrect = 0;
+    for (const mp of picks) {
+      const m = mp.match;
+      if (m.status === "FINISHED" && m.homeScore != null && m.awayScore != null) {
+        gDecided++;
+        if (outcomeOf(m.homeScore, m.awayScore) === outcomeOf(mp.predHome, mp.predAway)) gCorrect++;
+      }
+    }
+    return {
+      group: g,
+      first: firstOf.get(g) ?? null,
+      second: secondOf.get(g) ?? null,
+      earned: ptsByGroup.get(g) ?? 0,
+      // 4/scoreline + advancement (5+5+3+2) only if they actually picked finishers
+      potential: picks.length * 4 + (firstOf.has(g) || secondOf.has(g) ? 15 : 0),
+      correct: gCorrect,
+      decided: gDecided,
+      picks: picks.length,
+    };
+  });
+
+  return {
+    participant: { name: p.name, slug: p.slug },
+    standing: p.standing,
+    stats: {
+      decided,
+      correct,
+      exact,
+      pct: decided ? Math.round((correct / decided) * 100) : null,
+    },
+    byGroup,
+    categories: [...byCategory.entries()],
+    finalPick: p.finalPick,
+    bestThirds: p.bestThirdPicks.map((b) => b.team),
+  };
 }
 
 export async function getParticipantCount() {

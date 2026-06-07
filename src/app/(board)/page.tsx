@@ -28,50 +28,53 @@ export default async function LeaderboardPage() {
     getParticipantCount(),
   ]);
   const lastSettledAt = appState.lastSettledAt;
-
-  // Before the tournament kicks off, show a countdown instead of the board.
-  if (opener && Date.now() < opener.kickoff.getTime()) {
-    return <CountdownView opener={opener} playerCount={playerCount} />;
-  }
-
-  if (leaderboard.length === 0) {
-    return <EmptyState />;
-  }
-
-  const top = leaderboard[0];
+  const before = !!opener && Date.now() < opener.kickoff.getTime();
   const leaders = leaderboard.filter((r) => r.rank === 1);
 
   return (
     <div>
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="font-display text-3xl text-ink sm:text-4xl">Leaderboard</h1>
-        {lastSettledAt && (
-          <span className="font-mono text-[11px] text-dim">
-            updated {formatKickoff(lastSettledAt)}
-          </span>
-        )}
-      </div>
+      {/* Pre-tournament: countdown up top, leaderboard still below it. */}
+      {before && opener && <CountdownView opener={opener} playerCount={playerCount} />}
 
-      {/* Leader hero */}
-      <div className="mb-6 overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-br from-gold/10 to-panel p-5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold">
-          {leaders.length > 1 ? "Tied for first" : "Current leader"}
-        </div>
-        <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
-          <div className="font-display text-4xl text-gold sm:text-5xl">
-            {leaders.map((l) => l.name).join(" · ")}
-          </div>
-          <div className="tnum text-3xl font-bold text-ink">
-            {top.points}
-            <span className="ml-1 text-sm font-normal text-mut">pts</span>
-          </div>
-        </div>
-      </div>
+      {leaderboard.length === 0 ? (
+        before ? null : <EmptyState />
+      ) : (
+        <div className={before ? "mt-12" : ""}>
+          {before ? (
+            <h2 className="mb-4 font-display text-2xl text-ink">
+              Players <span className="text-mut">· potential so far</span>
+            </h2>
+          ) : (
+            <>
+              <div className="mb-6 flex items-baseline justify-between">
+                <h1 className="font-display text-3xl text-ink sm:text-4xl">Leaderboard</h1>
+                {lastSettledAt && (
+                  <span className="font-mono text-[11px] text-dim">
+                    updated {formatKickoff(lastSettledAt)}
+                  </span>
+                )}
+              </div>
+              <div className="mb-6 overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-br from-gold/10 to-panel p-5">
+                <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-gold">
+                  {leaders.length > 1 ? "Tied for first" : "Current leader"}
+                </div>
+                <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
+                  <div className="font-display text-4xl text-gold sm:text-5xl">
+                    {leaders.map((l) => l.name).join(" · ")}
+                  </div>
+                  <div className="tnum text-3xl font-bold text-ink">
+                    {leaderboard[0].points}
+                    <span className="ml-1 text-sm font-normal text-mut">pts</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-line">
         {/* header — bucket columns appear on sm+; mobile shows chips per row */}
-        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-mut">
+        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-xs uppercase tracking-wider text-mut">
           <span className="w-7">#</span>
           <span className="flex-1">Player</span>
           {BUCKET_META.map((b) => (
@@ -125,9 +128,11 @@ export default async function LeaderboardPage() {
           </Link>
         ))}
       </div>
-      <p className="mt-3 text-center font-mono text-[11px] text-dim">
+      <p className="mt-3 text-center text-xs text-dim">
         GRP group · ADV advance · 3RD thirds · KO knockout · FIN final · Max = highest still reachable
       </p>
+        </div>
+      )}
     </div>
   );
 }

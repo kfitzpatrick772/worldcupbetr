@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOpener, getPlayerProfile } from "@/lib/queries";
+import { getAppState, getPlayerProfile } from "@/lib/queries";
 import { Flag, Movement } from "@/components/ui";
-import { CATEGORY_LABEL, formatDay, picksRevealed } from "@/lib/format";
+import { CATEGORY_LABEL } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +12,12 @@ export default async function PlayerPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [data, opener] = await Promise.all([getPlayerProfile(slug), getOpener()]);
+  const [data, appState] = await Promise.all([getPlayerProfile(slug), getAppState()]);
   if (!data) notFound();
   const { participant, standing, stats, byGroup, categories, finalPick, bestThirds } = data;
-  const revealed = picksRevealed(opener?.kickoff ?? null);
+  // Group picks reveal at the group lock; knockout/final picks at the knockout lock.
+  const groupRevealed = appState.picksLocked;
+  const koRevealed = appState.knockoutLocked;
 
   const cat = new Map(categories);
   const knockoutPts =
@@ -59,9 +61,9 @@ export default async function PlayerPage({
         <Stat label="Max possible" value={standing?.maxPossible ?? 0} sub={`${stats.exact} exact`} />
       </div>
 
-      {!revealed && (
+      {!groupRevealed && (
         <p className="mt-5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm text-gold">
-          🔒 Picks are hidden until kickoff day{opener ? ` (${formatDay(opener.kickoff)})` : ""}.
+          🔒 Picks are hidden until the admin locks them (at kickoff).
         </p>
       )}
 
@@ -78,8 +80,8 @@ export default async function PlayerPage({
               </span>
             </div>
             <div className="space-y-1 text-sm">
-              <PickRow label="1st" team={g.first} blurred={!revealed} />
-              <PickRow label="2nd" team={g.second} blurred={!revealed} />
+              <PickRow label="1st" team={g.first} blurred={!groupRevealed} />
+              <PickRow label="2nd" team={g.second} blurred={!groupRevealed} />
             </div>
             <div className="mt-2 border-t border-line/60 pt-2 font-mono text-xs text-mut">
               {g.decided > 0
@@ -95,9 +97,9 @@ export default async function PlayerPage({
       <div className="rounded-2xl border border-line bg-panel p-4">
         {finalPick ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            <FinalPick label="Champion" team={finalPick.championTeam} accent blurred={!revealed} />
-            <FinalPick label="Runner-up" team={finalPick.runnerUpTeam} blurred={!revealed} />
-            <FinalPick label="3rd place" team={finalPick.thirdPlaceTeam} blurred={!revealed} />
+            <FinalPick label="Champion" team={finalPick.championTeam} accent blurred={!koRevealed} />
+            <FinalPick label="Runner-up" team={finalPick.runnerUpTeam} blurred={!koRevealed} />
+            <FinalPick label="3rd place" team={finalPick.thirdPlaceTeam} blurred={!koRevealed} />
           </div>
         ) : (
           <p className="text-sm text-mut">Knockout bracket entered after the group stage.</p>

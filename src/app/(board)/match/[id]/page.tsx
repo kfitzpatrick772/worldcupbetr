@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getMatchDetail, getOpener } from "@/lib/queries";
+import { getAppState, getMatchDetail } from "@/lib/queries";
 import { Flag, ScoreCell, StatusBadge } from "@/components/ui";
-import { formatDay, formatKickoff, picksRevealed, stageLabel } from "@/lib/format";
+import { formatKickoff, stageLabel } from "@/lib/format";
 import { outcomeOf } from "@/lib/scoring/engine";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +13,12 @@ export default async function MatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [detail, opener] = await Promise.all([getMatchDetail(id), getOpener()]);
+  const [detail, appState] = await Promise.all([getMatchDetail(id), getAppState()]);
   if (!detail) notFound();
   const { match: m, rows } = detail;
   const isGroup = m.stage === "GROUP";
-  const revealed = picksRevealed(opener?.kickoff ?? null);
+  // Picks reveal the moment the admin locks them (no more edits).
+  const revealed = appState.picksLocked;
   const hasResult =
     m.homeScore != null && m.awayScore != null && (m.status === "LIVE" || m.status === "FINISHED");
   const actual = hasResult ? outcomeOf(m.homeScore!, m.awayScore!) : null;
@@ -72,8 +73,7 @@ export default async function MatchPage({
         <>
           {!revealed && (
             <p className="mb-2 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm text-gold">
-              🔒 Everyone&apos;s picks are hidden until kickoff day
-              {opener ? ` (${formatDay(opener.kickoff)})` : ""}.
+              🔒 Everyone&apos;s picks are hidden until the admin locks them (at kickoff).
             </p>
           )}
           <div className="overflow-hidden rounded-2xl border border-line">

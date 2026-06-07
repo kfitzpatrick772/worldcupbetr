@@ -12,6 +12,8 @@ export async function getAppState() {
       id: 1,
       picksLocked: false,
       lockedAt: null,
+      knockoutLocked: false,
+      knockoutLockedAt: null,
       lastSettledAt: null,
     }
   );

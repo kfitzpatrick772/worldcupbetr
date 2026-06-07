@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { buildTable, computeGroupOrder } from "./scoring/standings";
 import type { FinishedMatch } from "./scoring/standings";
 import { outcomeOf } from "./scoring/engine";
+import { dayKey, formatDay } from "./format";
 
 export async function getAppState() {
   return (
@@ -364,6 +365,34 @@ export async function getPlayerProfile(slug: string) {
 
 export async function getParticipantCount() {
   return prisma.participant.count();
+}
+
+/** True once the opening match has kicked off. Lives here (a module function,
+ *  not a component) so the time read stays out of the render path. */
+export function tournamentUnderway(opener: { kickoff: Date } | null): boolean {
+  return !!opener && Date.now() >= opener.kickoff.getTime();
+}
+
+/** The most relevant matchday to surface on the board once the tournament is
+ *  underway: today's matches (Eastern), else the next upcoming day, else the
+ *  final day after it's all over — so the panel is never empty mid-tournament. */
+export async function getMatchday(): Promise<
+  { kind: "today" | "next" | "last"; label: string; matches: MatchView[] } | null
+> {
+  const all = await getMatches(); // sorted by kickoff ascending
+  if (all.length === 0) return null;
+  const now = Date.now();
+  const onDay = (key: string) => all.filter((m) => dayKey(m.kickoff) === key);
+
+  const today = onDay(dayKey(new Date()));
+  if (today.length) return { kind: "today", label: "Today", matches: today };
+
+  const upcoming = all.find((m) => m.kickoff.getTime() > now);
+  if (upcoming) {
+    return { kind: "next", label: formatDay(upcoming.kickoff), matches: onDay(dayKey(upcoming.kickoff)) };
+  }
+  const last = all[all.length - 1];
+  return { kind: "last", label: formatDay(last.kickoff), matches: onDay(dayKey(last.kickoff)) };
 }
 
 /** The tournament opener (earliest match) with teams + venue. */

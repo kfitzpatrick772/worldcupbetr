@@ -18,6 +18,8 @@ name: Score sync
 #
 # Cadence: every 15 minutes = ~96 API-Football calls/day, which fits the free
 # tier (100/day). On a paid plan, tighten to */5 for snappier live scores.
+#
+# Verification run: secret re-pasted + hardened auth endpoint deployed.
 
 on:
   schedule:

@@ -23,6 +23,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
+  # Also run when this file itself changes on main — gives an immediate
+  # smoke-run on rollout without waiting for the next schedule tick.
+  push:
+    branches: [main]
+    paths: [".github/workflows/score-sync.yml"]
 
 permissions: {}
 

@@ -4,6 +4,10 @@ name: Score sync
 # pulls fixtures from API-Football and settles points (DEPLOY.md §6). This is
 # the "any scheduler" option — use it if no Railway cron is configured.
 #
+# Each run also doubles as a production diagnostic: it checks app health and
+# probes the cron endpoint's auth config, so the job log always says exactly
+# which link in the ingest chain is broken (see step output).
+#
 # Setup (one-time):
 #   1. Repo → Settings → Secrets and variables → Actions → New repository secret
 #      Name: CRON_SECRET   Value: same as the CRON_SECRET env var on Railway.
@@ -26,6 +30,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    env:
+      APP_URL: ${{ vars.APP_URL || 'https://friendlybet.up.railway.app' }}
     steps:
       - name: Skip outside the tournament window
         id: window
@@ -38,14 +44,34 @@ jobs:
             echo "active=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Call /api/cron/sync
+      - name: App health check
+        if: steps.window.outputs.active == 'true'
+        run: |
+          body=$(curl -sS --max-time 30 "$APP_URL/api/health") || {
+            echo "::error::App unreachable at $APP_URL"; exit 1; }
+          echo "Health: $body"
+          echo "$body" | grep -q '"ok":true' || {
+            echo "::error::App is up but unhealthy: $body"; exit 1; }
+
+      - name: Probe cron endpoint auth config (no secret needed)
+        if: steps.window.outputs.active == 'true'
+        run: |
+          code=$(curl -sS --max-time 30 -o /tmp/probe -w '%{http_code}' \
+            "$APP_URL/api/cron/sync")
+          echo "Unauthenticated probe: HTTP $code — $(cat /tmp/probe)"
+          case "$code" in
+            503) echo "::error::Server has NO CRON_SECRET env var on Railway — the sync endpoint is disabled. Set CRON_SECRET on the Railway service."; exit 1 ;;
+            401) echo "Server CRON_SECRET is configured (endpoint correctly rejects unauthenticated calls)." ;;
+            *)   echo "::warning::Unexpected status $code from the cron endpoint." ;;
+          esac
+
+      - name: Run the sync
         if: steps.window.outputs.active == 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ vars.APP_URL || 'https://friendlybet.up.railway.app' }}
         run: |
           if [[ -z "$CRON_SECRET" ]]; then
-            echo "::error::CRON_SECRET repo secret is not set (Settings → Secrets and variables → Actions)."
+            echo "::error::The CRON_SECRET *repo secret* is not set (Settings → Secrets and variables → Actions). The probes above ran, but the sync itself cannot authenticate without it."
             exit 1
           fi
 

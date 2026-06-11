@@ -1,0 +1,68 @@
+name: Score sync
+
+# Drives the live-score ingest: calls the app's /api/cron/sync endpoint, which
+# pulls fixtures from API-Football and settles points (DEPLOY.md §6). This is
+# the "any scheduler" option — use it if no Railway cron is configured.
+#
+# Setup (one-time):
+#   1. Repo → Settings → Secrets and variables → Actions → New repository secret
+#      Name: CRON_SECRET   Value: same as the CRON_SECRET env var on Railway.
+#   2. Merge this file to main (scheduled workflows only run from the default
+#      branch).
+#   3. On Railway, make sure SCORE_PROVIDER=apifootball and APIFOOTBALL_KEY are
+#      set — otherwise the sync is a deliberate no-op and this job fails loudly.
+#
+# Cadence: every 15 minutes = ~96 API-Football calls/day, which fits the free
+# tier (100/day). On a paid plan, tighten to */5 for snappier live scores.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Skip outside the tournament window
+        id: window
+        run: |
+          today=$(date -u +%F)
+          if [[ "$today" < "2026-06-11" || "$today" > "2026-07-20" ]]; then
+            echo "Outside tournament window ($today) — skipping."
+            echo "active=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "active=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Call /api/cron/sync
+        if: steps.window.outputs.active == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://friendlybet.up.railway.app' }}
+        run: |
+          if [[ -z "$CRON_SECRET" ]]; then
+            echo "::error::CRON_SECRET repo secret is not set (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+          body=$(curl -sS --max-time 60 -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/sync")
+          echo "Response: $body"
+
+          # Fail loudly on every non-working state so a red X = scores are NOT flowing.
+          if echo "$body" | grep -q '"error"'; then
+            echo "::error::Sync failed: $body"
+            exit 1
+          fi
+          if echo "$body" | grep -q '"skipped"'; then
+            echo "::error::SCORE_PROVIDER is 'manual' on the server — set SCORE_PROVIDER=apifootball and APIFOOTBALL_KEY on Railway."
+            exit 1
+          fi
+          if ! echo "$body" | grep -q '"unmatched":\[\]'; then
+            echo "::warning::Some feed fixtures did not match a seeded game — check the response above and add a name alias in src/lib/feed/match.ts."
+          fi

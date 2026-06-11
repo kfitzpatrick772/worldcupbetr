@@ -1,19 +1,30 @@
+import { timingSafeEqual } from "node:crypto";
 import { getProvider, syncFromProvider } from "@/lib/feed";
 
-// Score-feed sync endpoint. Railway cron hits this on a schedule. Secured by a
+// Score-feed sync endpoint. A scheduler hits this during matches. Secured by a
 // shared CRON_SECRET (Authorization: Bearer <secret>, or ?key=<secret>).
 // No-ops when SCORE_PROVIDER=manual (admin enters results by hand).
 
 export const dynamic = "force-dynamic";
 
+// Constant-time compare, tolerant of stray whitespace picked up when the
+// secret is pasted into Railway / GitHub secret forms.
+function secretMatches(presented: string | null, secret: string): boolean {
+  if (!presented) return false;
+  const a = Buffer.from(presented.trim());
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 async function run(req: Request): Promise<Response> {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET?.trim();
   if (!secret) {
     return Response.json({ error: "CRON_SECRET not configured" }, { status: 503 });
   }
   const auth = req.headers.get("authorization");
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
   const key = new URL(req.url).searchParams.get("key");
-  if (auth !== `Bearer ${secret}` && key !== secret) {
+  if (!secretMatches(bearer, secret) && !secretMatches(key, secret)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

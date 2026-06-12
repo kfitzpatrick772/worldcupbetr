@@ -16,6 +16,7 @@ const SYNONYMS: Record<string, string> = {
   congodr: "drcongo",
   democraticrepublicofthecongo: "drcongo",
   caboverde: "capeverde",
+  capeverdeislands: "capeverde", // api-football's name for Cape Verde
   iranislamicrepublic: "iran",
 };
 

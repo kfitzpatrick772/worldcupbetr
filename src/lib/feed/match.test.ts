@@ -10,6 +10,7 @@ describe("normalizeName", () => {
     expect(normalizeName("Bosnia and Herzegovina")).toBe(normalizeName("Bosnia & Herzegovina"));
     expect(normalizeName("Curaçao")).toBe("curacao");
     expect(normalizeName("DR Congo")).toBe(normalizeName("Congo DR"));
+    expect(normalizeName("Cape Verde Islands")).toBe(normalizeName("Cape Verde"));
   });
 });
 

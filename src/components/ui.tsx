@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { MatchView } from "@/lib/queries";
 
 // Movement arrow for leaderboard (positive = climbed since last settle).
@@ -8,6 +9,25 @@ export function Movement({ value }: { value: number }) {
     <span className={`tnum text-xs font-semibold ${up ? "text-lime" : "text-red"}`}>
       {up ? "▲" : "▼"}
       {Math.abs(value)}
+    </span>
+  );
+}
+
+// Prominent live indicator: pinging dot + LIVE + (optionally) the match
+// minute. Use wherever a live game is shown; StatusBadge stays for compact
+// secondary contexts.
+export function LiveBadge({ children }: { children?: ReactNode }) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-full border border-red/50 bg-red/15 px-3 py-1 text-red"
+      style={{ boxShadow: "0 0 14px color-mix(in srgb, var(--color-red) 40%, transparent)" }}
+    >
+      <span className="relative flex h-2 w-2" aria-hidden>
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-red" />
+      </span>
+      <span className="font-mono text-xs font-bold uppercase tracking-[0.18em]">Live</span>
+      {children && <span className="tnum text-sm font-bold">{children}</span>}
     </span>
   );
 }

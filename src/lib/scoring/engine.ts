@@ -300,7 +300,8 @@ function roundLabel(r: AdvanceRound): string {
   return { R16: "Round of 16", QF: "Quarter-finals", SF: "Semi-finals", FINAL: "the Final" }[r];
 }
 
-/** Score everyone and assign ranks (live-inclusive, ties share a rank). */
+/** Score everyone and assign ranks (locked points only — provisional points
+ *  from LIVE matches never move the board; ties share a rank). */
 export function scoreAll(
   participants: ParticipantPicks[],
   matchesById: Map<string, MatchResult>,
@@ -309,14 +310,14 @@ export function scoreAll(
   const scored = participants.map((p) =>
     scoreParticipant(p, matchesById, actuals),
   );
-  const sorted = [...scored].sort((a, b) => b.livePoints - a.livePoints);
+  const sorted = [...scored].sort((a, b) => b.lockedPoints - a.lockedPoints);
   const ranked = new Map<string, number>();
   let lastPoints: number | null = null;
   let lastRank = 0;
   sorted.forEach((s, i) => {
-    const rank = lastPoints === s.livePoints ? lastRank : i + 1;
+    const rank = lastPoints === s.lockedPoints ? lastRank : i + 1;
     ranked.set(s.participantId, rank);
-    lastPoints = s.livePoints;
+    lastPoints = s.lockedPoints;
     lastRank = rank;
   });
   return scored.map((s) => ({ ...s, rank: ranked.get(s.participantId)! }));

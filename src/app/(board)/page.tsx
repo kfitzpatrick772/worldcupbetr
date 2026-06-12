@@ -8,7 +8,7 @@ import {
   tournamentUnderway,
 } from "@/lib/queries";
 import type { MatchView } from "@/lib/queries";
-import { Flag, Movement, RankBadge, ScoreCell, StatusBadge } from "@/components/ui";
+import { Flag, LiveBadge, Movement, RankBadge, ScoreCell, StatusBadge } from "@/components/ui";
 import { Countdown } from "@/components/Countdown";
 import { LiveMinute } from "@/components/LiveMinute";
 import { AddToHomeScreen } from "@/components/AddToHomeScreen";
@@ -247,10 +247,9 @@ function MatchdayCard({ m }: { m: MatchView }) {
       <div className="mb-2.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-mut">
         <span>{stageLabel(m.stage, m.group)}</span>
         {live ? (
-          <span className="flex items-center gap-1.5 text-red">
-            <StatusBadge status="LIVE" />
+          <LiveBadge>
             <LiveMinute kickoffMs={m.kickoff.getTime()} />
-          </span>
+          </LiveBadge>
         ) : m.status === "FINISHED" ? (
           <StatusBadge status={m.status} />
         ) : (

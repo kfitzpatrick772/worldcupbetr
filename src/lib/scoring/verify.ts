@@ -122,8 +122,8 @@ export async function verifyScoring() {
   const standingDiscrepancies: { name: string; fresh: number; stored: number }[] = [];
   for (const f of fresh) {
     const stored = storedTotal.get(f.participantId);
-    if (stored == null || stored !== f.livePoints) {
-      standingDiscrepancies.push({ name: nameById.get(f.participantId) ?? f.participantId, fresh: f.livePoints, stored: stored ?? 0 });
+    if (stored == null || stored !== f.lockedPoints) {
+      standingDiscrepancies.push({ name: nameById.get(f.participantId) ?? f.participantId, fresh: f.lockedPoints, stored: stored ?? 0 });
     }
   }
 

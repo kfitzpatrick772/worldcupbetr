@@ -108,10 +108,11 @@ export async function settle(trigger = "manual") {
       update: { ...actuals.final },
     });
 
-    // Rewrite scores.
+    // Rewrite scores. Provisional lines (from LIVE matches) are NOT persisted:
+    // points reach the board only once a match is finished.
     await tx.scoreLine.deleteMany({});
     const lineData = scored.flatMap((s) =>
-      s.lines.map((l) => ({
+      s.lines.filter((l) => !l.provisional).map((l) => ({
         participantId: s.participantId,
         category: l.category,
         points: l.points,
@@ -129,13 +130,13 @@ export async function settle(trigger = "manual") {
         where: { participantId: s.participantId },
         create: {
           participantId: s.participantId,
-          totalPoints: s.livePoints,
+          totalPoints: s.lockedPoints,
           rank: s.rank,
           prevRank: prev.get(s.participantId) ?? null,
           maxPossible: s.maxPossible,
         },
         update: {
-          totalPoints: s.livePoints,
+          totalPoints: s.lockedPoints,
           rank: s.rank,
           prevRank: prev.get(s.participantId) ?? s.rank,
           maxPossible: s.maxPossible,

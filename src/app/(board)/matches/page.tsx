@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMatches } from "@/lib/queries";
-import { Flag, ScoreCell, StatusBadge } from "@/components/ui";
+import { Flag, LiveBadge, ScoreCell, StatusBadge } from "@/components/ui";
+import { LiveMinute } from "@/components/LiveMinute";
 import { dayKey, formatDay, formatTimeET, stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,13 @@ export default async function MatchesPage() {
                     <span>
                       {stageLabel(m.stage, m.group)} · {formatTimeET(m.kickoff)}
                     </span>
-                    <StatusBadge status={m.status} />
+                    {m.status === "LIVE" ? (
+                      <LiveBadge>
+                        <LiveMinute kickoffMs={m.kickoff.getTime()} />
+                      </LiveBadge>
+                    ) : (
+                      <StatusBadge status={m.status} />
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">

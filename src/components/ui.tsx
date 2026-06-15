@@ -32,35 +32,19 @@ export function ExactCount({ value }: { value: number }) {
   );
 }
 
-// Recent form: up to 5 dots (lime=correct, gold ring=exact, red=wrong) plus a
-// current-streak badge (hot lime at 2+, muted at 1).
-export function FormDots({ form, streak }: { form: FormResult[]; streak: number }) {
+// Recent form: up to 5 small dots — lime=correct, gold=exact, red=wrong.
+export function FormDots({ form }: { form: FormResult[] }) {
   if (form.length === 0) return <span className="text-sm text-dim">—</span>;
   return (
-    <span className="flex items-center gap-2">
-      <span className="flex gap-1" aria-label="recent form">
-        {form.map((r, i) => (
-          <span
-            key={i}
-            className={`h-2.5 w-2.5 rounded-full ${
-              r === "exact"
-                ? "bg-gold ring-2 ring-inset ring-bg"
-                : r === "hit"
-                  ? "bg-lime"
-                  : "bg-red"
-            }`}
-          />
-        ))}
-      </span>
-      {streak >= 1 && (
+    <span className="flex gap-1" aria-label="recent form">
+      {form.map((r, i) => (
         <span
-          className={`tnum shrink-0 rounded px-1 text-[10px] font-bold ring-1 ring-inset ${
-            streak >= 2 ? "bg-lime/15 text-lime ring-lime/25" : "text-dim ring-line"
+          key={i}
+          className={`h-2 w-2 rounded-full ${
+            r === "exact" ? "bg-gold" : r === "hit" ? "bg-lime" : "bg-red"
           }`}
-        >
-          {`W${streak}`}
-        </span>
-      )}
+        />
+      ))}
     </span>
   );
 }

@@ -105,20 +105,20 @@ export default async function LeaderboardPage() {
       {/* Table — skill metrics (Pick % / Exact / Form) on one line per player,
           with persistent column headers at every width. */}
       <div className="overflow-hidden rounded-2xl border border-line">
-        <div className="grid items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-mut grid-cols-[1.75rem_minmax(0,1fr)_3.4rem_2.4rem_auto_2.8rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.8rem_3.2rem_6.4rem_3rem_3.4rem]">
-          <span>#</span>
-          <span>Player</span>
+        <div className="grid items-center gap-1.5 border-b border-line bg-panel px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-wide text-mut sm:gap-2 sm:text-[11px] sm:tracking-wider grid-cols-[1.9rem_minmax(0,1fr)_2.9rem_2.1rem_3.6rem_2.6rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.6rem_3rem_4.6rem_3rem_3.4rem]">
+          <span className="whitespace-nowrap">#</span>
+          <span className="whitespace-nowrap">Player</span>
           <span className="whitespace-nowrap">Pick %</span>
-          <span>Exact</span>
-          <span>Form</span>
-          <span className="hidden text-right sm:block">Max</span>
-          <span className="text-right">Pts</span>
+          <span className="whitespace-nowrap">Exact</span>
+          <span className="whitespace-nowrap">Form</span>
+          <span className="hidden whitespace-nowrap text-right sm:block">Max</span>
+          <span className="whitespace-nowrap text-right">Pts</span>
         </div>
         {leaderboard.map((r) => (
           <Link
             key={r.participantId}
             href={`/players/${r.slug}`}
-            className="grid items-center gap-2 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2 grid-cols-[1.75rem_minmax(0,1fr)_3.4rem_2.4rem_auto_2.8rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.8rem_3.2rem_6.4rem_3rem_3.4rem]"
+            className="grid items-center gap-1.5 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2 sm:gap-2 grid-cols-[1.9rem_minmax(0,1fr)_2.9rem_2.1rem_3.6rem_2.6rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.6rem_3rem_4.6rem_3rem_3.4rem]"
           >
             <span className="shrink-0">
               <RankBadge rank={r.rank} />
@@ -132,7 +132,7 @@ export default async function LeaderboardPage() {
             </span>
             <PickRate pct={r.stats.pct} />
             <ExactCount value={r.stats.exact} />
-            <FormDots form={r.stats.form} streak={r.stats.streak} />
+            <FormDots form={r.stats.form} />
             <span className="tnum hidden text-right text-xs text-dim sm:block">{r.maxPossible}</span>
             <span className="tnum text-right text-lg font-bold text-lime">{r.points}</span>
           </Link>
@@ -143,7 +143,7 @@ export default async function LeaderboardPage() {
           <i className="h-2.5 w-2.5 rounded-full bg-lime" /> Correct result
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <i className="h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-inset ring-bg" /> Exact scoreline
+          <i className="h-2.5 w-2.5 rounded-full bg-gold" /> Exact scoreline
         </span>
         <span className="inline-flex items-center gap-1.5">
           <i className="h-2.5 w-2.5 rounded-full bg-red" /> Wrong

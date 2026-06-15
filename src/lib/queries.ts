@@ -28,6 +28,57 @@ export type Buckets = {
   final: number; // champion + runner-up + third-place winner
 };
 
+export type FormResult = "hit" | "exact" | "miss";
+
+// Group-stage skill stats derived on read from a player's group-match picks vs
+// finished results. This is display-only derivation (hit rate, not score
+// recomputation) — the same pattern getPlayerProfile() already uses; it never
+// touches Standing/ScoreLine.
+export type PickStats = {
+  decided: number; // finished group matches the player picked
+  correct: number; // right outcome (W/D/L)
+  exact: number; // exact scoreline
+  pct: number | null; // hit rate %, null until any match is decided
+  form: FormResult[]; // up to 5 most recent decided, chronological (oldest→newest)
+  streak: number; // current run of correct results from the most recent
+};
+
+type PickWithMatch = {
+  predHome: number;
+  predAway: number;
+  match: { status: string; homeScore: number | null; awayScore: number | null; kickoff: Date };
+};
+
+function pickStats(picks: PickWithMatch[]): PickStats {
+  const finished = picks
+    .filter((p) => p.match.status === "FINISHED" && p.match.homeScore != null && p.match.awayScore != null)
+    .sort((a, b) => a.match.kickoff.getTime() - b.match.kickoff.getTime());
+
+  let correct = 0;
+  let exact = 0;
+  const results: FormResult[] = finished.map((p) => {
+    const hs = p.match.homeScore!;
+    const as = p.match.awayScore!;
+    const isExact = p.predHome === hs && p.predAway === as;
+    const isCorrect = outcomeOf(hs, as) === outcomeOf(p.predHome, p.predAway);
+    if (isCorrect) correct++;
+    if (isExact) exact++;
+    return isExact ? "exact" : isCorrect ? "hit" : "miss";
+  });
+
+  let streak = 0;
+  for (let i = results.length - 1; i >= 0 && results[i] !== "miss"; i--) streak++;
+
+  return {
+    decided: finished.length,
+    correct,
+    exact,
+    pct: finished.length ? Math.round((correct / finished.length) * 100) : null,
+    form: results.slice(-5),
+    streak,
+  };
+}
+
 export type LeaderRow = {
   participantId: string;
   name: string;
@@ -38,6 +89,7 @@ export type LeaderRow = {
   maxPossible: number;
   movement: number; // prevRank - rank (positive = climbed)
   buckets: Buckets;
+  stats: PickStats;
 };
 
 // Which scoring categories roll up into each leaderboard column.
@@ -62,11 +114,19 @@ export async function getLeaderboard(): Promise<LeaderRow[]> {
   // Drive the board off the Participant table (not Standing) so a player can
   // never be silently dropped if a settle hasn't created their snapshot yet —
   // the public list always matches the player count.
-  const [participants, grouped] = await Promise.all([
+  const [participants, grouped, picks] = await Promise.all([
     prisma.participant.findMany({ include: { standing: true } }),
     prisma.scoreLine.groupBy({
       by: ["participantId", "category"],
       _sum: { points: true },
+    }),
+    prisma.groupMatchPick.findMany({
+      select: {
+        participantId: true,
+        predHome: true,
+        predAway: true,
+        match: { select: { status: true, homeScore: true, awayScore: true, kickoff: true } },
+      },
     }),
   ]);
 
@@ -78,6 +138,13 @@ export async function getLeaderboard(): Promise<LeaderRow[]> {
     bucketsByP.set(g.participantId, b);
   }
 
+  const picksByP = new Map<string, PickWithMatch[]>();
+  for (const p of picks) {
+    const arr = picksByP.get(p.participantId) ?? [];
+    arr.push(p);
+    picksByP.set(p.participantId, arr);
+  }
+
   const ranked = participants
     .map((p) => ({
       participantId: p.id,
@@ -87,6 +154,7 @@ export async function getLeaderboard(): Promise<LeaderRow[]> {
       prevRank: p.standing?.prevRank ?? null,
       maxPossible: p.standing?.maxPossible ?? 0,
       buckets: bucketsByP.get(p.id) ?? zeroBuckets(),
+      stats: pickStats(picksByP.get(p.id) ?? []),
     }))
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
@@ -377,6 +445,20 @@ export async function getPlayerProfile(slug: string) {
 
 export async function getParticipantCount() {
   return prisma.participant.count();
+}
+
+/** Group-stage progress for the leaderboard's stage bar: finished vs total
+ *  group matches. `complete` once the group stage is fully played out. */
+export async function getGroupStageProgress(): Promise<{
+  played: number;
+  total: number;
+  complete: boolean;
+}> {
+  const [played, total] = await Promise.all([
+    prisma.match.count({ where: { stage: "GROUP", status: "FINISHED" } }),
+    prisma.match.count({ where: { stage: "GROUP" } }),
+  ]);
+  return { played, total, complete: total > 0 && played === total };
 }
 
 /** True once the opening match has kicked off. Lives here (a module function,

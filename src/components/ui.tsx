@@ -1,5 +1,69 @@
 import type { ReactNode } from "react";
-import type { MatchView } from "@/lib/queries";
+import type { MatchView, FormResult } from "@/lib/queries";
+
+// Hit-rate % with a thin progress bar beneath. Single-line per the v2
+// leaderboard. null = no decided matches yet.
+export function PickRate({ pct }: { pct: number | null }) {
+  if (pct == null) return <span className="tnum text-sm text-dim">—</span>;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="tnum text-sm font-bold leading-none text-ink">{`${pct}%`}</span>
+      <span className="h-1 w-full overflow-hidden rounded-full bg-panel2">
+        <span
+          className="block h-full rounded-full bg-gradient-to-r from-lime2 to-lime"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+    </span>
+  );
+}
+
+// Count of exact scorelines nailed — the high-skill flex stat (gold).
+export function ExactCount({ value }: { value: number }) {
+  return (
+    <span
+      className={`tnum inline-flex items-center gap-1 text-sm font-bold ${
+        value > 0 ? "text-gold" : "text-dim"
+      }`}
+    >
+      <span aria-hidden>◎</span>
+      {value}
+    </span>
+  );
+}
+
+// Recent form: up to 5 dots (lime=correct, gold ring=exact, red=wrong) plus a
+// current-streak badge (hot lime at 2+, muted at 1).
+export function FormDots({ form, streak }: { form: FormResult[]; streak: number }) {
+  if (form.length === 0) return <span className="text-sm text-dim">—</span>;
+  return (
+    <span className="flex items-center gap-2">
+      <span className="flex gap-1" aria-label="recent form">
+        {form.map((r, i) => (
+          <span
+            key={i}
+            className={`h-2.5 w-2.5 rounded-full ${
+              r === "exact"
+                ? "bg-gold ring-2 ring-inset ring-bg"
+                : r === "hit"
+                  ? "bg-lime"
+                  : "bg-red"
+            }`}
+          />
+        ))}
+      </span>
+      {streak >= 1 && (
+        <span
+          className={`tnum shrink-0 rounded px-1 text-[10px] font-bold ring-1 ring-inset ${
+            streak >= 2 ? "bg-lime/15 text-lime ring-lime/25" : "text-dim ring-line"
+          }`}
+        >
+          {`W${streak}`}
+        </span>
+      )}
+    </span>
+  );
+}
 
 // Movement arrow for leaderboard (positive = climbed since last settle).
 export function Movement({ value }: { value: number }) {

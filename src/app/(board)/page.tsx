@@ -1,14 +1,25 @@
 import Link from "next/link";
 import {
   getAppState,
+  getGroupStageProgress,
   getLeaderboard,
   getMatchday,
   getOpener,
   getParticipantCount,
   tournamentUnderway,
 } from "@/lib/queries";
-import type { MatchView } from "@/lib/queries";
-import { Flag, LiveBadge, Movement, RankBadge, ScoreCell, StatusBadge } from "@/components/ui";
+import type { LeaderRow, MatchView } from "@/lib/queries";
+import {
+  ExactCount,
+  Flag,
+  FormDots,
+  LiveBadge,
+  Movement,
+  PickRate,
+  RankBadge,
+  ScoreCell,
+  StatusBadge,
+} from "@/components/ui";
 import { Countdown } from "@/components/Countdown";
 import { LiveMinute } from "@/components/LiveMinute";
 import { AddToHomeScreen } from "@/components/AddToHomeScreen";
@@ -16,25 +27,25 @@ import { formatKickoff, formatTimeET, stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-const BUCKET_META = [
-  { key: "group", short: "GRP", label: "Group matches" },
-  { key: "advance", short: "ADV", label: "Group advancement" },
-  { key: "thirds", short: "3RD", label: "Best thirds" },
-  { key: "knockout", short: "KO", label: "Knockout rounds" },
-  { key: "final", short: "FIN", label: "Final / champion" },
-] as const;
-
 export default async function LeaderboardPage() {
-  const [leaderboard, appState, opener, playerCount, matchday] = await Promise.all([
+  const [leaderboard, appState, opener, playerCount, matchday, groupProgress] = await Promise.all([
     getLeaderboard(),
     getAppState(),
     getOpener(),
     getParticipantCount(),
     getMatchday(),
+    getGroupStageProgress(),
   ]);
   const lastSettledAt = appState.lastSettledAt;
   const before = !!opener && !tournamentUnderway(opener);
   const leaders = leaderboard.filter((r) => r.rank === 1);
+  // Stage-aware: surface the bonus breakdown only once some player has earned
+  // non-group points (group advancement at group finalization, then knockout /
+  // final bonuses). Before that it's pure group-match scoring.
+  const bonusesEarned = leaderboard.some(
+    (r) => r.buckets.advance + r.buckets.thirds + r.buckets.knockout + r.buckets.final > 0,
+  );
+  const leader = leaderboard[0];
 
   return (
     <div>
@@ -64,7 +75,7 @@ export default async function LeaderboardPage() {
                   </span>
                 )}
               </div>
-              <div className="mb-6 overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-br from-gold/10 to-panel p-5">
+              <div className="mb-4 overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-br from-gold/10 to-panel p-5">
                 <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-gold">
                   {leaders.length > 1 ? "Tied for first" : "Current leader"}
                 </div>
@@ -73,70 +84,77 @@ export default async function LeaderboardPage() {
                     {leaders.map((l) => l.name).join(" · ")}
                   </div>
                   <div className="tnum text-3xl font-bold text-ink">
-                    {leaderboard[0].points}
+                    {leader.points}
                     <span className="ml-1 text-sm font-normal text-mut">pts</span>
                   </div>
                 </div>
+                {leaders.length === 1 && leader.stats.decided > 0 && (
+                  <div className="mt-3.5 flex flex-wrap gap-2">
+                    <LeaderStat k="Pick %" v={`${leader.stats.pct}%`} />
+                    <LeaderStat k="Exact" v={`◎ ${leader.stats.exact}`} gold />
+                    {leader.stats.streak >= 1 && <LeaderStat k="Streak" v={`W${leader.stats.streak}`} />}
+                  </div>
+                )}
               </div>
+              {!groupProgress.complete && groupProgress.total > 0 && (
+                <StageBar played={groupProgress.played} total={groupProgress.total} />
+              )}
             </>
           )}
 
-      {/* Table */}
+      {/* Table — skill metrics (Pick % / Exact / Form) on one line per player,
+          with persistent column headers at every width. */}
       <div className="overflow-hidden rounded-2xl border border-line">
-        {/* header — bucket columns appear on sm+; mobile shows chips per row */}
-        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-xs uppercase tracking-wider text-mut">
-          <span className="w-7">#</span>
-          <span className="flex-1">Player</span>
-          {BUCKET_META.map((b) => (
-            <span key={b.key} className="hidden w-9 text-right sm:block" title={b.label}>
-              {b.short}
-            </span>
-          ))}
-          <span className="hidden w-10 text-right sm:block">Max</span>
-          <span className="w-12 text-right">Pts</span>
+        <div className="grid items-center gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-mut grid-cols-[1.75rem_minmax(0,1fr)_3.4rem_2.4rem_auto_2.8rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.8rem_3.2rem_6.4rem_3rem_3.4rem]">
+          <span>#</span>
+          <span>Player</span>
+          <span className="whitespace-nowrap">Pick %</span>
+          <span>Exact</span>
+          <span>Form</span>
+          <span className="hidden text-right sm:block">Max</span>
+          <span className="text-right">Pts</span>
         </div>
         {leaderboard.map((r) => (
           <Link
             key={r.participantId}
             href={`/players/${r.slug}`}
-            className="flex items-start gap-2 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2 sm:items-center"
+            className="grid items-center gap-2 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2 grid-cols-[1.75rem_minmax(0,1fr)_3.4rem_2.4rem_auto_2.8rem] sm:grid-cols-[2rem_minmax(0,1fr)_4.8rem_3.2rem_6.4rem_3rem_3.4rem]"
           >
-            <span className="w-7 shrink-0">
+            <span className="shrink-0">
               <RankBadge rank={r.rank} />
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0">
               <span className="flex items-center gap-2">
-                <span className="truncate text-base font-semibold text-ink">{r.name}</span>
+                <span className="truncate text-base font-bold text-ink">{r.name}</span>
                 <Movement value={r.movement} />
               </span>
-              {/* mobile: every metric in a labeled grid (desktop uses the columns at right) */}
-              <span className="mt-2 grid grid-cols-3 gap-1.5 sm:hidden">
-                {BUCKET_META.map((b) => (
-                  <MetricCell key={b.key} label={b.short} value={r.buckets[b.key]} />
-                ))}
-                <MetricCell label="MAX" value={r.maxPossible} muted />
-              </span>
+              {bonusesEarned && <BonusChips buckets={r.buckets} />}
             </span>
-            {BUCKET_META.map((b) => (
-              <span
-                key={b.key}
-                className={`tnum hidden w-9 text-right text-sm sm:block ${
-                  r.buckets[b.key] > 0 ? "text-ink" : "text-dim"
-                }`}
-              >
-                {r.buckets[b.key]}
-              </span>
-            ))}
-            <span className="tnum hidden w-10 text-right text-xs text-dim sm:block">
-              {r.maxPossible}
-            </span>
-            <span className="tnum w-12 shrink-0 text-right text-lg font-bold text-lime">{r.points}</span>
+            <PickRate pct={r.stats.pct} />
+            <ExactCount value={r.stats.exact} />
+            <FormDots form={r.stats.form} streak={r.stats.streak} />
+            <span className="tnum hidden text-right text-xs text-dim sm:block">{r.maxPossible}</span>
+            <span className="tnum text-right text-lg font-bold text-lime">{r.points}</span>
           </Link>
         ))}
       </div>
-      <p className="mt-3 text-center text-xs text-dim">
-        GRP group · ADV advance · 3RD thirds · KO knockout · FIN final · Max = highest still reachable
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-mut">
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-2.5 w-2.5 rounded-full bg-lime" /> Correct result
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-inset ring-bg" /> Exact scoreline
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-2.5 w-2.5 rounded-full bg-red" /> Wrong
+        </span>
+        <span className="text-dim">· Max = highest still reachable</span>
+      </div>
+      {!bonusesEarned && (
+        <p className="mt-2 text-center font-mono text-[11px] text-dim">
+          Advancement, knockout &amp; final bonuses appear here as they&apos;re earned
+        </p>
+      )}
         </div>
       )}
 
@@ -280,17 +298,58 @@ function MatchdayCard({ m }: { m: MatchView }) {
   );
 }
 
-function MetricCell({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
+function LeaderStat({ k, v, gold }: { k: string; v: string; gold?: boolean }) {
   return (
-    <span className="flex items-center justify-between gap-1 rounded-lg bg-panel2 px-2 py-1">
-      <span className="font-mono text-[10px] font-medium uppercase tracking-wide text-mut">{label}</span>
-      <span
-        className={`tnum text-sm font-bold ${
-          muted ? "text-mut" : value > 0 ? "text-ink" : "text-dim"
-        }`}
-      >
-        {value}
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white/[0.04] px-2.5 py-1">
+      <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-mut">{k}</span>
+      <span className={`tnum text-sm font-bold ${gold ? "text-gold" : "text-lime"}`}>{v}</span>
+    </span>
+  );
+}
+
+function StageBar({ played, total }: { played: number; total: number }) {
+  const pct = total ? Math.round((played / total) * 100) : 0;
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-2.5">
+      <span className="shrink-0 font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-lime">
+        Group Stage
       </span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-panel2">
+        <span
+          className="block h-full rounded-full bg-gradient-to-r from-lime2 to-lime"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span className="shrink-0 whitespace-nowrap font-mono text-xs text-mut">
+        <b className="text-ink">{played}</b> / {total} matches
+      </span>
+    </div>
+  );
+}
+
+// Stage-aware: once knockout/advancement/final points exist, surface them as
+// compact chips under the player's name (group points are already in Pts).
+function BonusChips({ buckets }: { buckets: LeaderRow["buckets"] }) {
+  const items = (
+    [
+      ["ADV", buckets.advance],
+      ["3RD", buckets.thirds],
+      ["KO", buckets.knockout],
+      ["FIN", buckets.final],
+    ] as const
+  ).filter(([, v]) => v > 0);
+  if (items.length === 0) return null;
+  return (
+    <span className="mt-1.5 flex flex-wrap gap-1">
+      {items.map(([k, v]) => (
+        <span
+          key={k}
+          className="inline-flex items-center gap-1 rounded bg-panel2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-mut"
+        >
+          <span className="tracking-wide">{k}</span>
+          <span className="tnum text-ink">{v}</span>
+        </span>
+      ))}
     </span>
   );
 }

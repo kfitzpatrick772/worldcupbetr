@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMatches } from "@/lib/queries";
 import { Flag, LiveBadge, ScoreCell, StatusBadge } from "@/components/ui";
 import { LiveMinute } from "@/components/LiveMinute";
+import { ScrollToDay } from "@/components/ScrollToDay";
 import { dayKey, formatDay, formatTimeET, stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function MatchesPage() {
   const matches = await getMatches();
 
-  // group by calendar day
+  // group by calendar day (matches arrive sorted by kickoff ascending)
   const days = new Map<string, typeof matches>();
   for (const m of matches) {
     const k = dayKey(m.kickoff);
@@ -17,14 +18,28 @@ export default async function MatchesPage() {
     days.get(k)!.push(m);
   }
 
+  // Land on today's matches — or the next upcoming day if nothing is on today,
+  // else the final day once the tournament is over. Day keys are YYYY-MM-DD
+  // (Eastern), so string comparison is chronological.
+  const dayEntries = [...days.entries()];
+  const todayKey = dayKey(new Date());
+  const targetKey =
+    dayEntries.find(([k]) => k >= todayKey)?.[0] ?? dayEntries.at(-1)?.[0] ?? null;
+
   return (
     <div>
       <h1 className="mb-6 font-display text-3xl text-ink sm:text-4xl">Matches</h1>
+      {targetKey && <ScrollToDay targetId={`day-${targetKey}`} />}
       <div className="space-y-8">
-        {[...days.entries()].map(([k, dayMatches]) => (
-          <section key={k}>
-            <h2 className="mb-2 font-mono text-[11px] uppercase tracking-[0.25em] text-lime">
+        {dayEntries.map(([k, dayMatches]) => (
+          <section key={k} id={`day-${k}`} className="scroll-mt-20">
+            <h2 className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-lime">
               {formatDay(dayMatches[0].kickoff)}
+              {k === todayKey && (
+                <span className="rounded-full bg-lime px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-bg">
+                  Today
+                </span>
+              )}
             </h2>
             <div className="overflow-hidden rounded-2xl border border-line">
               {dayMatches.map((m) => (

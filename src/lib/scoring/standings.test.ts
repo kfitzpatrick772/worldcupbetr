@@ -25,6 +25,24 @@ describe("group table", () => {
     expect(computeGroupOrder(teams, matches)).toEqual(["A", "B", "C", "D"]);
   });
 
+  it("ranks head-to-head ABOVE overall goal difference (2026 rule)", () => {
+    // A and B both finish on 6 pts. A has the far better overall GD (+7 vs +2),
+    // but B won the head-to-head meeting — under 2026 rules B must rank first.
+    const t = ["A", "B", "C", "D"];
+    const m: FinishedMatch[] = [
+      { homeTeamId: "B", awayTeamId: "A", homeScore: 1, awayScore: 0 }, // B beat A (H2H)
+      { homeTeamId: "A", awayTeamId: "C", homeScore: 4, awayScore: 0 },
+      { homeTeamId: "A", awayTeamId: "D", homeScore: 4, awayScore: 0 },
+      { homeTeamId: "B", awayTeamId: "D", homeScore: 2, awayScore: 0 },
+      { homeTeamId: "C", awayTeamId: "B", homeScore: 1, awayScore: 0 }, // B drops pts to C
+      { homeTeamId: "D", awayTeamId: "C", homeScore: 1, awayScore: 0 },
+    ];
+    // A: 6 pts, GD +7 · B: 6 pts, GD +2 · both above C/D.
+    const order = computeGroupOrder(t, m);
+    expect(order[0]).toBe("B"); // head-to-head winner first, despite worse GD
+    expect(order[1]).toBe("A");
+  });
+
   it("breaks an overall tie by head-to-head", () => {
     // X, Y, Z all 1-1-0 vs each other style; W loses all.
     // Construct: X beat Y, Y beat Z, Z beat X (cycle), all beat W by same margin.

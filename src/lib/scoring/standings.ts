@@ -1,9 +1,23 @@
 // Pure group-table + best-thirds computation (FIFA 2026 tiebreakers).
 //
-// Order: (1) points, (2) goal difference, (3) goals for, (4) head-to-head among
-// the tied subset (points, GD, GF in matches between them), then a deterministic
-// alphabetical fallback (FIFA's fair-play / drawing-of-lots steps need data we
-// don't have — the admin can override the rare true tie).
+// 2026 group ranking order (changed from 2022 — head-to-head now comes BEFORE
+// overall goal difference):
+//   1. points (all group matches)
+//   — among teams level on points, the "head-to-head" mini-table of the matches
+//     played between exactly those teams:
+//   2. head-to-head points
+//   3. head-to-head goal difference
+//   4. head-to-head goals scored
+//   — if still level:
+//   5. overall goal difference
+//   6. overall goals scored
+//   7. fair-play / team-conduct score   (data we don't have)
+//   8. FIFA world ranking               (data we don't have)
+// then a deterministic alphabetical fallback (admin can override a genuine
+// remaining tie). NOTE: criteria 2–4 are applied to the full points-tied subset;
+// the rare recursive re-application to a still-tied sub-subset (and 7–8) are not
+// modelled — see docs. Third-place ranking (computeBestThirds) is cross-group so
+// it has no head-to-head step: points → GD → GF → conduct → ranking.
 
 export interface FinishedMatch {
   homeTeamId: string;
@@ -63,13 +77,12 @@ function compareInGroup(
 ): number {
   const a = table.get(x)!;
   const b = table.get(y)!;
-  const overall = compareStats(a, b);
-  if (overall !== 0) return overall;
 
-  // Head-to-head among the full tied subset (teams equal on pts/GD/GF overall).
-  const tied = [...table.values()]
-    .filter((t) => compareStats(t, a) === 0)
-    .map((t) => t.teamId);
+  // 1. Overall points.
+  if (b.points !== a.points) return b.points - a.points;
+
+  // 2–4. Head-to-head among ALL teams level on points (2026: before overall GD).
+  const tied = [...table.values()].filter((t) => t.points === a.points).map((t) => t.teamId);
   if (tied.length >= 2) {
     const sub = matches.filter(
       (m) => tied.includes(m.homeTeamId) && tied.includes(m.awayTeamId),
@@ -77,10 +90,17 @@ function compareInGroup(
     const h2h = buildTable(tied, sub);
     const ha = h2h.get(x)!;
     const hb = h2h.get(y)!;
-    const h2hCmp = compareStats(ha, hb);
-    if (h2hCmp !== 0) return h2hCmp;
+    if (hb.points !== ha.points) return hb.points - ha.points;
+    if (hb.gd !== ha.gd) return hb.gd - ha.gd;
+    if (hb.gf !== ha.gf) return hb.gf - ha.gf;
   }
-  // Deterministic final fallback (admin can override true ties).
+
+  // 5–6. Overall goal difference, then goals scored.
+  if (b.gd !== a.gd) return b.gd - a.gd;
+  if (b.gf !== a.gf) return b.gf - a.gf;
+
+  // 7–8. Fair-play conduct, then FIFA ranking — data we don't have.
+  // Deterministic fallback; admin can override a genuine remaining tie.
   return x < y ? -1 : x > y ? 1 : 0;
 }
 

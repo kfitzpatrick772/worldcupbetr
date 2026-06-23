@@ -6,6 +6,7 @@ const TABS = [
   { href: "/", label: "Leaderboard" },
   { href: "/matches", label: "Matches" },
   { href: "/groups", label: "Groups" },
+  { href: "/bracket", label: "Bracket" },
 ];
 
 export function TabNav() {

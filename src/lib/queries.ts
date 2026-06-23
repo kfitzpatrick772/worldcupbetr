@@ -4,6 +4,7 @@
 import { prisma } from "./db";
 import { buildTable, computeGroupOrder } from "./scoring/standings";
 import type { FinishedMatch } from "./scoring/standings";
+import { clinchedTop2 } from "./scoring/clinch";
 import { outcomeOf } from "./scoring/engine";
 import { dayKey, formatDay } from "./format";
 
@@ -445,6 +446,128 @@ export async function getPlayerProfile(slug: string) {
 
 export async function getParticipantCount() {
   return prisma.participant.count();
+}
+
+// ----- Bracket (knockout) -------------------------------------------------
+
+export type SlotTeam =
+  | { kind: "team"; teamId: string; name: string; flag: string; code: string }
+  | { kind: "placeholder"; label: string; variant: "group" | "third" | "winner" };
+
+export type BracketMatch = {
+  slotLabel: string;
+  stage: string; // R32 | R16 | QF | SF | THIRD | FINAL
+  kickoff: Date;
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerTeamId: string | null;
+  homeSource: string | null; // raw feeder, e.g. "1C", "2F", "W74"
+  awaySource: string | null;
+  home: SlotTeam;
+  away: SlotTeam;
+};
+
+export type BracketData = {
+  matches: BracketMatch[]; // all knockout matches, in slot order (M73..M104)
+  r32Locked: number; // R32 sides resolved to a real team (out of 32)
+};
+
+const slotNum = (label: string) => parseInt(label.replace(/^M/, ""), 10) || 0;
+
+/**
+ * Read-time knockout bracket. Each slot resolves to a real team when known —
+ * via an explicitly assigned teamId, a mathematically clinched group position,
+ * or the winner/loser of an already-played feeder match — otherwise a readable
+ * placeholder ("Winner D", "3rd: C/D/F/G/H", "Winner M74"). Display-only
+ * derivation off standings + results, like getGroupTables; no writes.
+ */
+export async function getBracket(): Promise<BracketData> {
+  const [teams, allMatches] = await Promise.all([
+    prisma.team.findMany({ select: { id: true, name: true, flag: true, code: true, group: true } }),
+    prisma.match.findMany({
+      select: {
+        stage: true, slotLabel: true, group: true, kickoff: true, status: true,
+        homeScore: true, awayScore: true, winnerTeamId: true,
+        homeTeamId: true, awayTeamId: true, homeSource: true, awaySource: true,
+      },
+    }),
+  ]);
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const teamSlot = (id: string): SlotTeam => {
+    const t = teamById.get(id)!;
+    return { kind: "team", teamId: t.id, name: t.name, flag: t.flag, code: t.code };
+  };
+
+  // Which group positions are locked (clinched, or final once the group is done).
+  const clinchByGroup = new Map<string, { first: string | null; second: string | null }>();
+  for (const g of [...new Set(teams.map((t) => t.group))]) {
+    const ids = teams.filter((t) => t.group === g).map((t) => t.id);
+    const gm = allMatches
+      .filter((m) => m.stage === "GROUP" && m.group === g)
+      .map((m) => ({
+        homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId,
+        status: m.status, homeScore: m.homeScore, awayScore: m.awayScore,
+      }));
+    const c = clinchedTop2(ids, gm);
+    clinchByGroup.set(g, { first: c.first, second: c.second });
+  }
+
+  const winnerOf = new Map<string, string>();
+  const loserOf = new Map<string, string>();
+
+  const resolveSide = (teamId: string | null, source: string | null): SlotTeam => {
+    if (teamId) return teamSlot(teamId);
+    if (!source) return { kind: "placeholder", label: "TBD", variant: "winner" };
+    const gp = /^([12])([A-L])$/.exec(source);
+    if (gp) {
+      const [, pos, grp] = gp;
+      const c = clinchByGroup.get(grp);
+      const tid = c ? (pos === "1" ? c.first : c.second) : null;
+      if (tid) return teamSlot(tid);
+      return { kind: "placeholder", label: pos === "1" ? `Winner ${grp}` : `Runner-up ${grp}`, variant: "group" };
+    }
+    if (source.startsWith("3rd")) {
+      return { kind: "placeholder", label: source.replace("3rd ", "3rd: "), variant: "third" };
+    }
+    const wl = /^([WL])(\d+)$/.exec(source);
+    if (wl) {
+      const [, kind, n] = wl;
+      const tid = (kind === "W" ? winnerOf : loserOf).get(`M${n}`);
+      if (tid) return teamSlot(tid);
+      return { kind: "placeholder", label: `${kind === "W" ? "Winner" : "Loser"} M${n}`, variant: "winner" };
+    }
+    return { kind: "placeholder", label: source, variant: "winner" };
+  };
+
+  const matches: BracketMatch[] = [];
+  for (const m of allMatches
+    .filter((m) => m.slotLabel && m.stage !== "GROUP")
+    .sort((a, b) => slotNum(a.slotLabel!) - slotNum(b.slotLabel!))) {
+    const home = resolveSide(m.homeTeamId, m.homeSource);
+    const away = resolveSide(m.awayTeamId, m.awaySource);
+    if (m.status === "FINISHED" && home.kind === "team" && away.kind === "team") {
+      let winId = m.winnerTeamId ?? null;
+      if (!winId && m.homeScore != null && m.awayScore != null && m.homeScore !== m.awayScore) {
+        winId = m.homeScore > m.awayScore ? home.teamId : away.teamId;
+      }
+      if (winId) {
+        winnerOf.set(m.slotLabel!, winId);
+        loserOf.set(m.slotLabel!, winId === home.teamId ? away.teamId : home.teamId);
+      }
+    }
+    matches.push({
+      slotLabel: m.slotLabel!, stage: m.stage, kickoff: m.kickoff, status: m.status,
+      homeScore: m.homeScore, awayScore: m.awayScore, winnerTeamId: m.winnerTeamId,
+      homeSource: m.homeSource, awaySource: m.awaySource, home, away,
+    });
+  }
+
+  const r32Locked = matches
+    .filter((m) => m.stage === "R32")
+    .reduce((n, m) => n + (m.home.kind === "team" ? 1 : 0) + (m.away.kind === "team" ? 1 : 0), 0);
+
+  return { matches, r32Locked };
 }
 
 /** Group-stage progress for the leaderboard's stage bar: finished vs total

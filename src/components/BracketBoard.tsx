@@ -26,14 +26,14 @@ function winnerId(m: BracketMatch): string | null {
 }
 
 export function BracketBoard({ data }: { data: BracketData }) {
-  const [view, setView] = useState<"list" | "tree">("list");
+  const [view, setView] = useState<"tree" | "list">("tree");
 
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl text-ink sm:text-4xl">Bracket</h1>
         <div className="inline-flex shrink-0 rounded-full border border-line bg-panel p-0.5 font-mono text-xs">
-          {(["list", "tree"] as const).map((v) => (
+          {(["tree", "list"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -161,66 +161,97 @@ function SourceTag({ source }: { source: string }) {
 
 function TreeView({ data }: { data: BracketData }) {
   const cols: { stage: string; label: string }[] = [
-    { stage: "R32", label: "R32" },
-    { stage: "R16", label: "R16" },
-    { stage: "QF", label: "QF" },
-    { stage: "SF", label: "SF" },
+    { stage: "R32", label: "Round of 32" },
+    { stage: "R16", label: "Round of 16" },
+    { stage: "QF", label: "Quarter-finals" },
+    { stage: "SF", label: "Semi-finals" },
     { stage: "FINAL", label: "Final" },
   ];
   const third = data.matches.find((m) => m.stage === "THIRD");
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-line bg-panel p-3">
-        <div className="flex min-w-[680px] gap-2">
-          {cols.map((c) => {
-            const ms = data.matches.filter((m) => m.stage === c.stage);
-            return (
-              <div key={c.stage} className="flex flex-1 flex-col justify-around gap-2">
-                <div className="mb-1 text-center font-mono text-[10px] uppercase tracking-widest text-dim">{c.label}</div>
-                {ms.map((m) => (
-                  <TreeSlot key={m.slotLabel} m={m} highlight={c.stage === "FINAL"} />
-                ))}
+      <div className="overflow-x-auto rounded-2xl border border-line2 bg-gradient-to-b from-bg2 to-panel p-3 shadow-[0_2px_10px_rgba(0,0,0,0.35)] sm:p-5">
+        <div className="mx-auto w-max">
+          {/* round headers, kept out of the centering flow so the columns align */}
+          <div className="mb-3 flex gap-4 sm:gap-6">
+            {cols.map((c) => (
+              <div
+                key={c.stage}
+                className="w-[8.5rem] text-center font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-lime sm:w-40"
+              >
+                {c.label}
               </div>
-            );
-          })}
+            ))}
+          </div>
+          {/* equal-height columns; justify-around centers each tile between its pair */}
+          <div className="flex gap-4 sm:gap-6">
+            {cols.map((c) => {
+              const ms = data.matches.filter((m) => m.stage === c.stage);
+              return (
+                <div key={c.stage} className="flex w-[8.5rem] flex-col justify-around sm:w-40">
+                  {ms.map((m) => (
+                    <TreeSlot key={m.slotLabel} m={m} stage={c.stage} />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       {third && (
-        <div className="mt-3">
-          <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-dim">Third place</div>
-          <div className="max-w-xs"><TreeSlot m={third} /></div>
+        <div className="mt-4">
+          <div className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-dim">
+            Third place
+          </div>
+          <div className="max-w-[18rem]">
+            <TreeSlot m={third} stage="THIRD" />
+          </div>
         </div>
       )}
-      <p className="mt-3 text-center font-mono text-[11px] text-dim">Scroll sideways for later rounds</p>
+      <p className="mt-3 text-center font-mono text-[11px] text-dim">Scroll sideways for all rounds</p>
     </div>
   );
 }
 
-function TreeSlot({ m, highlight }: { m: BracketMatch; highlight?: boolean }) {
+function TreeSlot({ m, stage }: { m: BracketMatch; stage: string }) {
   const win = winnerId(m);
+  const isFinal = stage === "FINAL";
+  const live = m.status === "LIVE";
+  const accent = isFinal
+    ? "border-gold/60 shadow-[0_0_16px_rgba(247,201,72,0.18)]"
+    : live
+      ? "border-red/55 shadow-[0_0_14px_rgba(255,107,107,0.16)]"
+      : "border-line2 hover:border-lime/40";
   return (
-    <div className={`rounded-lg border bg-bg2 px-2 py-1.5 ${highlight ? "border-gold/50" : "border-line"}`}>
+    <div
+      className={`my-1.5 rounded-xl border bg-gradient-to-b from-raised to-panel px-2.5 py-2 shadow-[0_2px_6px_rgba(0,0,0,0.4)] transition-colors ${accent}`}
+    >
       <TreeSide team={m.home} score={m.homeScore} winner={win === teamIdOf(m.home)} dim={!!win && win !== teamIdOf(m.home)} />
-      <div className="my-1 border-t border-line/50" />
+      <div className="my-1.5 h-px bg-line2/80" />
       <TreeSide team={m.away} score={m.awayScore} winner={win === teamIdOf(m.away)} dim={!!win && win !== teamIdOf(m.away)} />
     </div>
   );
 }
 
+function shortLabel(team: Extract<SlotTeam, { kind: "placeholder" }>): string {
+  if (team.variant === "third") return "3rd place";
+  return team.label;
+}
+
 function TreeSide({ team, score, winner, dim }: { team: SlotTeam; score: number | null; winner: boolean; dim: boolean }) {
   return (
-    <div className={`flex items-center gap-1.5 ${dim ? "opacity-55" : ""}`}>
+    <div className={`flex items-center gap-1.5 ${dim ? "opacity-50" : ""}`}>
       {team.kind === "team" ? (
-        <span className="text-sm leading-none">{team.flag}</span>
+        <span className="text-base leading-none">{team.flag}</span>
       ) : (
-        <span className={`h-2 w-2 rounded-full border ${team.variant === "third" ? "border-blue/60" : "border-line2"}`} />
+        <span className={`h-2 w-2 shrink-0 rounded-full border ${team.variant === "third" ? "border-blue/60" : "border-line2"}`} />
       )}
-      <span className={`min-w-0 flex-1 truncate text-xs ${
-        team.kind === "team" ? (winner ? "font-bold text-lime" : "text-ink") : "italic text-dim"
+      <span className={`min-w-0 flex-1 truncate text-[0.8rem] ${
+        team.kind === "team" ? (winner ? "font-bold text-lime" : "font-semibold text-ink") : "italic text-dim"
       }`}>
-        {team.kind === "team" ? team.name : team.label}
+        {team.kind === "team" ? team.name : shortLabel(team)}
       </span>
-      {score != null && <span className={`tnum text-xs ${winner ? "text-lime" : "text-mut"}`}>{score}</span>}
+      {score != null && <span className={`tnum text-xs font-semibold ${winner ? "text-lime" : "text-mut"}`}>{score}</span>}
     </div>
   );
 }

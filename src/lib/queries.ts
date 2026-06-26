@@ -448,6 +448,29 @@ export async function getParticipantCount() {
   return prisma.participant.count();
 }
 
+/** Resolve a self-serve pick link's capability token to its participant.
+ *  (Not auth — the token IS the capability; the page shows a soft confirm.) */
+export async function getParticipantByPickToken(token: string) {
+  if (!token) return null;
+  return prisma.participant.findUnique({ where: { pickToken: token } });
+}
+
+/** Contestant pick links lock when the admin locks knockouts OR the first R32
+ *  match kicks off, whichever comes first. (Admin entry stays manual-lock only,
+ *  so the operator can still fix a mis-entry after kickoff.) */
+export async function isContestantPicksLocked(): Promise<boolean> {
+  const [state, firstR32] = await Promise.all([
+    prisma.appState.findUnique({ where: { id: 1 } }),
+    prisma.match.findFirst({
+      where: { stage: "R32" },
+      orderBy: { kickoff: "asc" },
+      select: { kickoff: true },
+    }),
+  ]);
+  if (state?.knockoutLocked) return true;
+  return !!firstR32 && Date.now() >= firstR32.kickoff.getTime();
+}
+
 // ----- Bracket (knockout) -------------------------------------------------
 
 export type SlotTeam =

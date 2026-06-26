@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "./db";
@@ -10,6 +11,7 @@ import {
   requireAdmin,
   setSessionCookie,
 } from "./auth";
+import { getParticipantByPickToken, isContestantPicksLocked } from "./queries";
 import { settle } from "./scoring/settle";
 
 // ---- login throttle (in-memory; single admin) ------------------------------
@@ -174,6 +176,32 @@ export async function savePicks(formData: FormData) {
 // Admin enters each player's predicted winner of every knockout slot (M73..M104).
 // We store KnockoutPick (editable source of truth) and DERIVE AdvancePick +
 // FinalPick for scoring. Blocked once knockout picks are locked.
+// Parse k_<slot> = predicted winner teamId from a bracket form.
+function parseKnockoutPicks(formData: FormData): Record<string, string> {
+  const picks: Record<string, string> = {};
+  for (const [key, raw] of formData.entries()) {
+    const v = String(raw);
+    if (key.startsWith("k_") && v) picks[key.slice(2)] = v;
+  }
+  return picks;
+}
+
+// Store KnockoutPick (source of truth) + derived AdvancePick/FinalPick for one
+// participant, replacing any prior picks. Shared by the admin and link paths.
+async function persistKnockoutPicks(participantId: string, picks: Record<string, string>) {
+  const { deriveKnockoutScoring } = await import("./bracket");
+  const { advance, final } = deriveKnockoutScoring(picks);
+  await prisma.$transaction(async (tx) => {
+    await tx.knockoutPick.deleteMany({ where: { participantId } });
+    await tx.advancePick.deleteMany({ where: { participantId } });
+    await tx.finalPick.deleteMany({ where: { participantId } });
+    const koData = Object.entries(picks).map(([slotLabel, teamId]) => ({ participantId, slotLabel, teamId }));
+    if (koData.length) await tx.knockoutPick.createMany({ data: koData });
+    if (advance.length) await tx.advancePick.createMany({ data: advance.map((a) => ({ participantId, ...a })) });
+    if (final) await tx.finalPick.create({ data: { participantId, ...final } });
+  });
+}
+
 export async function saveKnockout(formData: FormData) {
   await requireAdmin();
   const participantId = String(formData.get("participantId") ?? "");
@@ -183,32 +211,47 @@ export async function saveKnockout(formData: FormData) {
   const state = await prisma.appState.findUnique({ where: { id: 1 } });
   if (state?.knockoutLocked) redirect(`/admin/knockout/${slug}?locked=1`);
 
-  // k_<slot> = predicted winner teamId
-  const picks: Record<string, string> = {};
-  for (const [key, raw] of formData.entries()) {
-    const v = String(raw);
-    if (key.startsWith("k_") && v) picks[key.slice(2)] = v;
-  }
-
-  const { deriveKnockoutScoring } = await import("./bracket");
-  const { advance, final } = deriveKnockoutScoring(picks);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.knockoutPick.deleteMany({ where: { participantId } });
-    await tx.advancePick.deleteMany({ where: { participantId } });
-    await tx.finalPick.deleteMany({ where: { participantId } });
-
-    const koData = Object.entries(picks).map(([slotLabel, teamId]) => ({ participantId, slotLabel, teamId }));
-    if (koData.length) await tx.knockoutPick.createMany({ data: koData });
-    if (advance.length) await tx.advancePick.createMany({ data: advance.map((a) => ({ participantId, ...a })) });
-    if (final) await tx.finalPick.create({ data: { participantId, ...final } });
-  });
+  const picks = parseKnockoutPicks(formData);
+  await persistKnockoutPicks(participantId, picks);
 
   await audit("save-knockout-picks", slug, { slots: Object.keys(picks).length });
   await settle("admin");
   revalidatePath("/admin/knockout");
   revalidatePath(`/admin/knockout/${slug}`);
   redirect(`/admin/knockout/${slug}?saved=1`);
+}
+
+// Contestant self-serve submit via their unique pick link. Identity comes
+// STRICTLY from the token (never a client-sent participantId), so a tampered
+// form can't edit someone else's bracket. Locks per isContestantPicksLocked.
+export async function saveKnockoutViaToken(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const participant = await getParticipantByPickToken(token);
+  if (!participant) redirect(`/picks/${token}`); // page renders 404 for a dead link
+
+  if (await isContestantPicksLocked()) redirect(`/picks/${token}?locked=1`);
+
+  const picks = parseKnockoutPicks(formData);
+  await persistKnockoutPicks(participant.id, picks);
+
+  await audit("submit-knockout-link", participant.slug, { slots: Object.keys(picks).length });
+  await settle("contestant");
+  revalidatePath("/", "layout");
+  revalidatePath(`/picks/${token}`);
+  redirect(`/picks/${token}?saved=1`);
+}
+
+// Admin: rotate a contestant's link token (invalidates the old URL).
+export async function regeneratePickToken(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("participantId") ?? "");
+  if (!id) return;
+  await prisma.participant.update({
+    where: { id },
+    data: { pickToken: randomBytes(18).toString("base64url") },
+  });
+  await audit("regenerate-pick-token", id);
+  revalidatePath("/admin/links");
 }
 
 // ---- knockout lock + team assignment ---------------------------------------

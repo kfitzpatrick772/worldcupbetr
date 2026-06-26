@@ -8,6 +8,7 @@ const TABS = [
   { href: "/admin/participants", label: "Players" },
   { href: "/admin/picks", label: "Group picks" },
   { href: "/admin/knockout", label: "Knockout" },
+  { href: "/admin/links", label: "Pick links" },
   { href: "/admin/bracket", label: "Bracket" },
   { href: "/admin/results", label: "Results" },
   { href: "/admin/scoring", label: "Scoring" },

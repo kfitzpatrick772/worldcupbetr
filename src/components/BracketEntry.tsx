@@ -1,6 +1,5 @@
 "use client";
 import { useMemo, useState } from "react";
-import { saveKnockout } from "@/lib/actions";
 import {
   FINAL_SLOT,
   participantsOf,
@@ -27,17 +26,23 @@ export function BracketEntry({
   slotInfo,
   teams,
   initial,
-  participantId,
-  slug,
   locked,
+  action,
+  hidden,
+  submitLabel = "Save bracket",
 }: {
   r32: R32Teams;
   slotInfo: Record<string, SlotInfo>;
   teams: TeamMap;
   initial: Picks;
-  participantId: string;
-  slug: string;
   locked: boolean;
+  // The server action the form posts to (admin save or token-based submit).
+  action: (formData: FormData) => void | Promise<void>;
+  // Hidden form fields identifying who this is (admin: participantId+slug;
+  // contestant: token). Never the source of truth for identity on the token
+  // path — the action re-resolves the participant from the token.
+  hidden: Record<string, string>;
+  submitLabel?: string;
 }) {
   const [picks, setPicks] = useState<Picks>(initial);
 
@@ -118,9 +123,10 @@ export function BracketEntry({
   );
 
   return (
-    <form action={saveKnockout} className="space-y-6 pb-24">
-      <input type="hidden" name="participantId" value={participantId} />
-      <input type="hidden" name="slug" value={slug} />
+    <form action={action} className="space-y-6 pb-24">
+      {Object.entries(hidden).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
       {ALL.filter((s) => picks[s]).map((s) => (
         <input key={s} type="hidden" name={`k_${s}`} value={picks[s]} />
       ))}
@@ -141,7 +147,7 @@ export function BracketEntry({
             disabled={locked}
             className="rounded-xl bg-lime px-6 py-2.5 font-semibold text-black hover:opacity-90 disabled:opacity-40"
           >
-            Save bracket
+            {submitLabel}
           </button>
         </div>
       </div>

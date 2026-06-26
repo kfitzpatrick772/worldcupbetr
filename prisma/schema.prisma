@@ -108,6 +108,7 @@ model Participant {
   id        String   @id @default(cuid())
   name      String   @unique
   slug      String   @unique
+  pickToken String?  @unique @default(cuid()) // capability token for self-serve pick link
   createdAt DateTime @default(now())
 
   groupMatchPicks    GroupMatchPick[]

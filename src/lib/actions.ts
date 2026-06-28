@@ -273,12 +273,17 @@ export async function assignKnockoutTeams(formData: FormData) {
   await requireAdmin();
   const matchId = String(formData.get("matchId") ?? "");
   if (!matchId) return;
+  const slot = String(formData.get("slot") ?? "");
   const homeTeamId = String(formData.get("homeTeamId") ?? "") || null;
   const awayTeamId = String(formData.get("awayTeamId") ?? "") || null;
   await prisma.match.update({ where: { id: matchId }, data: { homeTeamId, awayTeamId } });
   await audit("assign-knockout-teams", matchId, { homeTeamId, awayTeamId });
   revalidatePath("/admin/bracket");
   revalidatePath("/", "layout");
+  // Redirect (not just revalidate) so the saved teams actually show on reload —
+  // an uncontrolled <select> would otherwise snap back to its old value and look
+  // like the save failed. The #anchor returns the admin to the slot they edited.
+  redirect(`/admin/bracket?saved=${encodeURIComponent(slot)}#${encodeURIComponent(slot)}`);
 }
 
 // Auto-fill the Round-of-32 group-position slots (1A/2B...) from finalized

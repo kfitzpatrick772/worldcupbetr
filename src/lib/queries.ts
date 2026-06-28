@@ -5,7 +5,7 @@ import { prisma } from "./db";
 import { buildTable, computeGroupOrder } from "./scoring/standings";
 import type { FinishedMatch } from "./scoring/standings";
 import { clinchedTop2 } from "./scoring/clinch";
-import { outcomeOf } from "./scoring/engine";
+import { outcomeOf, POINTS } from "./scoring/engine";
 import { dayKey, formatDay } from "./format";
 
 export async function getAppState() {
@@ -245,7 +245,45 @@ export async function getMatches(): Promise<MatchView[]> {
   return matches.map(toView);
 }
 
-/** Match drill-down: every participant's pick + points earned + current rank. */
+export type MatchPickRow = {
+  participantId: string;
+  name: string;
+  slug: string;
+  predHome: number;
+  predAway: number;
+  points: number;
+  rank: number | null;
+};
+
+export type KnockoutPickRow = {
+  participantId: string;
+  name: string;
+  slug: string;
+  teamName: string;
+  teamFlag: string;
+  correct: boolean | null; // null until the match is decided
+  points: number;
+  rank: number | null;
+};
+
+// Points a correct winner pick earns for a knockout match, by stage: winning a
+// match = the team reaching the next round (R32→R16=10 … SF→FINAL=80), and the
+// Final/Third matches award champion / third-place points.
+function knockoutPickPoints(stage: string): number {
+  switch (stage) {
+    case "R32": return POINTS.reach.R16;
+    case "R16": return POINTS.reach.QF;
+    case "QF": return POINTS.reach.SF;
+    case "SF": return POINTS.reach.FINAL;
+    case "THIRD": return POINTS.thirdPlace;
+    case "FINAL": return POINTS.champion;
+    default: return 0;
+  }
+}
+
+/** Match drill-down: every participant's pick + points earned + current rank.
+ *  Group matches use scoreline picks (`rows`); knockout matches use each
+ *  player's predicted winner of that slot (`koRows`). */
 export async function getMatchDetail(id: string) {
   const match = await prisma.match.findUnique({
     where: { id },
@@ -255,6 +293,52 @@ export async function getMatchDetail(id: string) {
     },
   });
   if (!match) return null;
+
+  // Knockout: the pick is the team a player chose to win this slot (advance).
+  if (match.stage !== "GROUP" && match.slotLabel) {
+    const [kpicks, standings] = await Promise.all([
+      prisma.knockoutPick.findMany({
+        where: { slotLabel: match.slotLabel },
+        include: {
+          participant: { select: { id: true, name: true, slug: true } },
+          team: { select: { name: true, flag: true } },
+        },
+      }),
+      prisma.standing.findMany({ select: { participantId: true, rank: true } }),
+    ]);
+    const rankByP = new Map(standings.map((s) => [s.participantId, s.rank]));
+    const winnerId =
+      match.winnerTeamId ??
+      (match.status === "FINISHED" &&
+      match.homeScore != null &&
+      match.awayScore != null &&
+      match.homeScore !== match.awayScore
+        ? match.homeScore > match.awayScore
+          ? match.homeTeamId
+          : match.awayTeamId
+        : null);
+    const decided = match.status === "FINISHED" && winnerId != null;
+    const pts = knockoutPickPoints(match.stage);
+    const koRows: KnockoutPickRow[] = kpicks
+      .map((p) => {
+        const correct = decided ? p.teamId === winnerId : null;
+        return {
+          participantId: p.participant.id,
+          name: p.participant.name,
+          slug: p.participant.slug,
+          teamName: p.team.name,
+          teamFlag: p.team.flag,
+          correct,
+          points: correct ? pts : 0,
+          rank: rankByP.get(p.participant.id) ?? null,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.points - a.points || (a.rank ?? 999) - (b.rank ?? 999) || a.name.localeCompare(b.name),
+      );
+    return { match: toView(match), rows: [] as MatchPickRow[], koRows };
+  }
 
   const [picks, lines, standings] = await Promise.all([
     prisma.groupMatchPick.findMany({
@@ -281,7 +365,7 @@ export async function getMatchDetail(id: string) {
     }))
     .sort((a, b) => b.points - a.points || (a.rank ?? 999) - (b.rank ?? 999));
 
-  return { match: toView(match), rows };
+  return { match: toView(match), rows, koRows: [] as KnockoutPickRow[] };
 }
 
 /** Current group table (live, from finished matches) with advancement markers. */

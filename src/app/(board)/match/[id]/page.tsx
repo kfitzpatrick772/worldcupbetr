@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAppState, getMatchDetail } from "@/lib/queries";
+import { getAppState, getMatchDetail, isContestantPicksLocked } from "@/lib/queries";
 import { Flag, LiveBadge, ScoreCell, StatusBadge } from "@/components/ui";
 import { LiveMinute } from "@/components/LiveMinute";
 import { formatKickoff, stageLabel } from "@/lib/format";
@@ -14,12 +14,19 @@ export default async function MatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [detail, appState] = await Promise.all([getMatchDetail(id), getAppState()]);
+  const [detail, appState, koLocked] = await Promise.all([
+    getMatchDetail(id),
+    getAppState(),
+    isContestantPicksLocked(),
+  ]);
   if (!detail) notFound();
-  const { match: m, rows } = detail;
+  const { match: m, rows, koRows } = detail;
   const isGroup = m.stage === "GROUP";
   // Picks reveal the moment the admin locks them (no more edits).
   const revealed = appState.picksLocked;
+  // Knockout picks reveal once the round is locked (first R32 kickoff / admin
+  // lock) — all at once, like the group round — or once this match is under way.
+  const koRevealed = koLocked || m.status === "LIVE" || m.status === "FINISHED";
   const hasResult =
     m.homeScore != null && m.awayScore != null && (m.status === "LIVE" || m.status === "FINISHED");
   const actual = hasResult ? outcomeOf(m.homeScore!, m.awayScore!) : null;
@@ -68,10 +75,61 @@ export default async function MatchPage({
       <h2 className="mb-2 mt-7 font-display text-2xl text-ink">Everyone&apos;s picks</h2>
 
       {!isGroup ? (
-        <p className="rounded-xl border border-line bg-panel p-4 text-sm text-mut">
-          Knockout points are for correctly predicting which teams advance — see each
-          player&apos;s bracket on their profile.
-        </p>
+        koRows.length === 0 ? (
+          <p className="rounded-xl border border-line bg-panel p-4 text-sm text-mut">
+            No bracket picks recorded for this match.
+          </p>
+        ) : !koRevealed ? (
+          <p className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm text-gold">
+            🔒 Everyone&apos;s picks for this match unlock at kickoff.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-2xl border border-line">
+              <div className="grid grid-cols-[1fr_1.3fr_auto_auto] gap-2 border-b border-line bg-panel px-3 py-2 font-mono text-xs uppercase tracking-wider text-mut">
+                <span>Player</span>
+                <span>Pick to advance</span>
+                <span className="hidden w-9 text-right sm:block">Rank</span>
+                <span className="w-12 text-right">Pts</span>
+              </div>
+              {koRows.map((r) => {
+                const decided = r.correct !== null;
+                const tone = !decided ? "text-ink" : r.correct ? "text-lime" : "text-red";
+                return (
+                  <Link
+                    key={r.participantId}
+                    href={`/players/${r.slug}`}
+                    className="grid grid-cols-[1fr_1.3fr_auto_auto] items-center gap-2 border-b border-line/60 px-3 py-3 transition-colors last:border-0 hover:bg-panel2"
+                  >
+                    <span className="truncate text-sm font-medium text-ink">{r.name}</span>
+                    <span className={`flex items-center gap-1.5 truncate text-sm font-semibold ${tone}`}>
+                      {decided && (
+                        <span aria-hidden className="shrink-0">
+                          {r.correct ? "✓" : "✗"}
+                        </span>
+                      )}
+                      <Flag flag={r.teamFlag} className="shrink-0 text-base" />
+                      <span className="truncate">{r.teamName}</span>
+                    </span>
+                    <span className="tnum hidden w-9 text-right text-xs text-mut sm:block">
+                      {r.rank ? `#${r.rank}` : "–"}
+                    </span>
+                    <span
+                      className={`tnum w-12 text-right text-sm font-bold ${r.points > 0 ? "text-lime" : "text-dim"}`}
+                    >
+                      {r.points > 0 ? `+${r.points}` : "0"}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-dim">
+              <span className="font-bold text-lime">✓</span> advanced ·{" "}
+              <span className="font-bold text-red">✗</span> didn&apos;t · points are awarded once
+              the match is final
+            </p>
+          </>
+        )
       ) : rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-panel p-4 text-sm text-mut">
           No picks recorded for this match yet.

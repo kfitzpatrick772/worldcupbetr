@@ -12,6 +12,7 @@ import {
   setSessionCookie,
 } from "./auth";
 import { getParticipantByPickToken, isContestantPicksLocked } from "./queries";
+import { propagateKnockoutWinners } from "./knockout-advance";
 import { settle } from "./scoring/settle";
 
 // ---- login throttle (in-memory; single admin) ------------------------------
@@ -342,7 +343,20 @@ export async function saveResult(formData: FormData) {
     },
   });
   await audit("save-result", id, { status, homeScore, awayScore, winnerTeamId });
+  // A finished knockout result may decide who advances — push winners into the
+  // next round's slots so the bracket and picks populate immediately.
+  await propagateKnockoutWinners();
   await settle("admin");
   revalidatePath("/admin/results");
+  revalidatePath("/admin/bracket");
+  revalidatePath("/", "layout");
+}
+
+// Manual fallback: fill later-round slots from every decided knockout result.
+export async function advanceKnockoutWinners() {
+  await requireAdmin();
+  const filled = await propagateKnockoutWinners();
+  await audit("advance-knockout-winners", `${filled} slots`);
+  revalidatePath("/admin/bracket");
   revalidatePath("/", "layout");
 }

@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { assignKnockoutTeams, autofillR32 } from "@/lib/actions";
+import { advanceKnockoutWinners, assignKnockoutTeams, autofillR32 } from "@/lib/actions";
 import { stageLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -119,9 +119,20 @@ export default async function BracketPage({
         })}
       </div>
 
-      <h2 className="mb-2 mt-7 font-mono text-[11px] uppercase tracking-[0.25em] text-mut">
-        Later rounds (auto-advance from results)
-      </h2>
+      <div className="mb-2 mt-7 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.25em] text-mut">
+          Later rounds (auto-advance from results)
+        </h2>
+        <form action={advanceKnockoutWinners}>
+          <button className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-mut hover:border-lime hover:text-lime">
+            Advance winners now
+          </button>
+        </form>
+      </div>
+      <p className="mb-3 text-xs text-dim">
+        Winners flow into the next round automatically as results come in — use the button
+        to fill them immediately.
+      </p>
       <div className="grid gap-1.5 sm:grid-cols-2">
         {later.map((m) => (
           <div key={m.id} className="flex items-center gap-2 rounded-lg border border-line/60 bg-panel px-3 py-2 text-sm">

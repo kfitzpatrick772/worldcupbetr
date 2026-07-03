@@ -3,6 +3,7 @@
 
 import { prisma } from "../db";
 import { settle } from "../scoring/settle";
+import { propagateKnockoutWinners } from "../knockout-advance";
 import { matchFixture, normalizeName } from "./match";
 import type { FeedFixture, ScoreProvider } from "./types";
 
@@ -67,6 +68,10 @@ export async function applyFixtures(fixtures: FeedFixture[]): Promise<SyncResult
       updated++;
     }
   }
+
+  // Advance decided knockout winners into the next round's slots so R16+
+  // populate as soon as a match is won (and the feed can then track them).
+  await propagateKnockoutWinners();
 
   let settled = false;
   if (updated > 0) {

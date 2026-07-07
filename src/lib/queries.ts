@@ -5,6 +5,9 @@ import { prisma } from "./db";
 import { buildTable, computeGroupOrder } from "./scoring/standings";
 import type { FinishedMatch } from "./scoring/standings";
 import { clinchedTop2 } from "./scoring/clinch";
+import { winnerLoser } from "./scoring/derive";
+import { analyzePaths, exactPaths } from "./scoring/path";
+import type { PathPlayer, KnockoutState, KoSlot, Round, Stage } from "./scoring/path";
 import { outcomeOf, POINTS } from "./scoring/engine";
 import { dayKey, formatDay } from "./format";
 
@@ -530,6 +533,206 @@ export async function getPlayerProfile(slug: string) {
 
 export async function getParticipantCount() {
   return prisma.participant.count();
+}
+
+// ----- Path to the Trophy -------------------------------------------------
+
+export type PathStatus = "clinched" | "in_control" | "contender" | "long_shot" | "eliminated";
+export type PathStakeView = { teamName: string; teamFlag: string; label: string; points: number; status: "locked" | "live" | "dead" };
+export type PathRowView = {
+  participantId: string;
+  name: string;
+  slug: string;
+  rank: number | null;
+  locked: number;
+  tightMax: number;
+  gapToLead: number;
+  status: PathStatus;
+  eliminated: boolean;
+  clinched: boolean;
+  stakes: PathStakeView[];
+  winShare: number | null; // exact win % of remaining outcomes, when computable
+  mustHappen: string[]; // readable lines (exact conditions if available, else rooting bullets)
+  rooting: string; // one-line summary for the hero
+  reason: string | null; // why eliminated
+};
+export type PathToTrophy = {
+  started: boolean;
+  aliveCount: number;
+  stageLabel: string;
+  remainingLabel: string;
+  hasExact: boolean;
+  players: PathRowView[];
+};
+
+const KO_STAGES: Stage[] = ["R32", "R16", "QF", "SF", "THIRD", "FINAL"];
+const STAGE_REACH: Record<string, Round> = { R32: "R16", R16: "QF", QF: "SF", SF: "FINAL" };
+const STAGE_COUNT: Record<string, number> = { R32: 16, R16: 8, QF: 4, SF: 2 };
+const VERB: Record<string, string> = {
+  Champion: "win the trophy",
+  Final: "reach the final",
+  "Semi-final": "reach the semis",
+  "Quarter-final": "reach the quarters",
+  "Round of 16": "reach the round of 16",
+  "Runner-up": "make the final",
+  "Third place": "win the third-place game",
+};
+const SLOT_STAGE_LABEL: Record<string, string> = {
+  R16: "round of 16", QF: "quarter-final", SF: "semi-final", THIRD: "third-place game", FINAL: "final",
+};
+
+/** Who can still win the pool and what must happen — see src/lib/scoring/path.ts. */
+export async function getPathToTrophy(): Promise<PathToTrophy> {
+  const [teams, matches, participants, grouped] = await Promise.all([
+    prisma.team.findMany({ select: { id: true, name: true, flag: true } }),
+    prisma.match.findMany({
+      select: {
+        stage: true, slotLabel: true, status: true,
+        homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true, winnerTeamId: true,
+      },
+    }),
+    prisma.participant.findMany({
+      include: { standing: true, advancePicks: true, finalPick: true },
+    }),
+    prisma.scoreLine.groupBy({ by: ["participantId", "category"], _sum: { points: true } }),
+  ]);
+
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const tName = (id: string | null) => (id && teamById.get(id)?.name) || "TBD";
+  const tFlag = (id: string | null) => (id && teamById.get(id)?.flag) || "";
+
+  const ko = matches.filter((m) => m.slotLabel && m.stage !== "GROUP");
+  const finishedByStage = new Map<string, number>();
+  for (const m of ko) if (m.status === "FINISHED") finishedByStage.set(m.stage, (finishedByStage.get(m.stage) ?? 0) + 1);
+  const started = [...finishedByStage.values()].some((n) => n > 0);
+
+  // ---- knockout state (reached / eliminated / final / finalized) ----
+  const reached: Record<Round, Set<string>> = { R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set() };
+  const eliminatedAt = new Map<string, Stage>();
+  const finalState = { championId: null as string | null, runnerUpId: null as string | null, thirdId: null as string | null };
+  const slots = new Map<string, KoSlot>();
+  for (const m of ko) {
+    const wl = winnerLoser({
+      stage: m.stage, homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId,
+      homeScore: m.homeScore, awayScore: m.awayScore, winnerTeamId: m.winnerTeamId, status: m.status,
+    } as Parameters<typeof winnerLoser>[0]);
+    slots.set(m.slotLabel!, { slot: m.slotLabel!, home: m.homeTeamId, away: m.awayTeamId, winner: wl.winner ?? null });
+    if (wl.winner) {
+      const reach = STAGE_REACH[m.stage];
+      if (reach) reached[reach].add(wl.winner);
+      if (wl.loser) eliminatedAt.set(wl.loser, m.stage as Stage);
+      if (m.stage === "FINAL") { finalState.championId = wl.winner; finalState.runnerUpId = wl.loser ?? null; }
+      if (m.stage === "THIRD") finalState.thirdId = wl.winner;
+    }
+  }
+  const finalizedRounds = new Set<Round>();
+  for (const st of ["R32", "R16", "QF", "SF"]) {
+    if ((finishedByStage.get(st) ?? 0) >= STAGE_COUNT[st]) finalizedRounds.add(STAGE_REACH[st]);
+  }
+  const koState: KnockoutState = { reached, eliminatedAt, final: finalState, finalizedRounds };
+
+  // ---- per-player inputs ----
+  const GROUP_CATS = new Set(["GROUP_MATCH", "GROUP_ADVANCE", "GROUP_WINNER_BONUS", "GROUP_RUNNERUP_BONUS", "BEST_THIRD"]);
+  const groupPartByP = new Map<string, number>();
+  for (const g of grouped) {
+    if (GROUP_CATS.has(g.category)) groupPartByP.set(g.participantId, (groupPartByP.get(g.participantId) ?? 0) + (g._sum.points ?? 0));
+  }
+  const rankByP = new Map(participants.map((p) => [p.id, p.standing?.rank ?? null]));
+  const pathPlayers: PathPlayer[] = participants.map((p) => ({
+    participantId: p.id,
+    name: p.name,
+    slug: p.slug,
+    locked: p.standing?.totalPoints ?? 0,
+    groupPart: groupPartByP.get(p.id) ?? 0,
+    advance: p.advancePicks.map((a) => ({ round: a.round as Round, teamId: a.teamId })),
+    championId: p.finalPick?.championTeamId ?? null,
+    runnerUpId: p.finalPick?.runnerUpTeamId ?? null,
+    thirdId: p.finalPick?.thirdPlaceTeamId ?? null,
+  }));
+
+  const analyzed = analyzePaths(pathPlayers, koState);
+  const exact = started ? exactPaths(pathPlayers, slots) : null;
+  const leader = analyzed.reduce((a, b) => (b.locked > a.locked ? b : a), analyzed[0]);
+  const leaderChampAlive =
+    leader && leader.stakes.find((s) => s.label === "Champion" && s.status === "live");
+
+  const slotOpponent = (slot: string, teamId: string): string | null => {
+    const s = slots.get(slot);
+    if (!s) return null;
+    const other = s.home === teamId ? s.away : s.away === teamId ? s.home : null;
+    return other ? tName(other) : null;
+  };
+  const slotStage = (slot: string) => {
+    const s = ko.find((m) => m.slotLabel === slot);
+    return s ? SLOT_STAGE_LABEL[s.stage] ?? s.stage : "";
+  };
+
+  const players: PathRowView[] = analyzed.map((row) => {
+    const stakes: PathStakeView[] = row.stakes.map((s) => ({
+      teamName: tName(s.teamId), teamFlag: tFlag(s.teamId), label: s.label, points: s.points, status: s.status,
+    }));
+    const topLive = row.stakes.filter((s) => s.status === "live").sort((a, b) => b.points - a.points)[0];
+    const ex = exact?.byPlayer.get(row.participantId) ?? null;
+
+    // Exact enumeration is complete — when available it overrides the (sound but
+    // conservative) heuristic for eliminated/clinched/status.
+    const eliminated = ex ? ex.eliminated : row.eliminated;
+    const clinched = ex ? ex.clinched : row.clinched;
+    const status: PathStatus = clinched ? "clinched" : eliminated ? "eliminated" : row.status === "eliminated" ? "long_shot" : row.status;
+
+    // readable "what must happen"
+    let mustHappen: string[] = [];
+    if (ex && !eliminated && !clinched && ex.mustHappen.length) {
+      mustHappen = ex.mustHappen.slice(0, 4).map((c) => {
+        const opp = slotOpponent(c.slot, c.teamId);
+        return opp ? `${tName(c.teamId)} beats ${opp} (${slotStage(c.slot)})` : `${tName(c.teamId)} wins the ${slotStage(c.slot)}`;
+      });
+    } else if (!eliminated && topLive) {
+      mustHappen = [`You need ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"} (+${topLive.points}).`];
+      if (status !== "in_control" && leaderChampAlive && leader.participantId !== row.participantId) {
+        mustHappen.push(`…and ${leader.name}'s ${tName(leaderChampAlive.teamId)} to slip up.`);
+      }
+    }
+
+    // hero one-liner
+    let rooting: string;
+    if (clinched) rooting = "Title already clinched.";
+    else if (eliminated) rooting = "Out of contention.";
+    else if (status === "in_control")
+      rooting = `Leads by ${row.gapToLead}.` + (topLive ? ` Clinches if ${tName(topLive.teamId)} ${VERB[topLive.label] ?? "delivers"}.` : "");
+    else rooting = topLive ? `Needs ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"}.` : "Needs help.";
+
+    const reason = eliminated
+      ? ex
+        ? "Can't finish first in any remaining outcome."
+        : `Ceiling ${row.tightMax} can't catch the lead (${leader.locked}).`
+      : null;
+
+    return {
+      participantId: row.participantId, name: row.name, slug: row.slug, rank: rankByP.get(row.participantId) ?? null,
+      locked: row.locked, tightMax: row.tightMax, gapToLead: row.gapToLead,
+      status, eliminated, clinched,
+      stakes, winShare: ex ? ex.winShare : null, mustHappen, rooting, reason,
+    };
+  });
+  // Eliminated players (by the final, exact-aware verdict) sink to the bottom.
+  players.sort((a, b) => Number(a.eliminated) - Number(b.eliminated) || b.locked - a.locked || a.name.localeCompare(b.name));
+
+  // stage + remaining labels
+  const remainByStage = KO_STAGES.map((st) => ({ st, n: ko.filter((m) => m.stage === st && m.status !== "FINISHED").length })).filter((x) => x.n > 0);
+  const curStage = remainByStage[0]?.st ?? "FINAL";
+  const stageLabel = { R32: "Round of 32", R16: "Round of 16", QF: "Quarter-finals", SF: "Semi-finals", THIRD: "Third-place", FINAL: "Final" }[curStage] ?? "Knockouts";
+  const abbr: Record<string, string> = { R32: "R32", R16: "R16", QF: "QF", SF: "SF", THIRD: "3rd", FINAL: "Final" };
+  const remainingLabel = remainByStage.map((x) => `${x.n} ${abbr[x.st]}`).join(" · ") + " left";
+
+  return {
+    started,
+    aliveCount: players.filter((p) => !p.eliminated).length,
+    stageLabel,
+    remainingLabel,
+    hasExact: !!exact,
+    players,
+  };
 }
 
 /** Resolve a self-serve pick link's capability token to its participant.

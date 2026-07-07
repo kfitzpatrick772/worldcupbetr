@@ -6,8 +6,10 @@ import {
   getMatchday,
   getOpener,
   getParticipantCount,
+  getPathToTrophy,
   tournamentUnderway,
 } from "@/lib/queries";
+import { PathHero } from "@/components/PathToTrophy";
 import type { LeaderRow, MatchView } from "@/lib/queries";
 import {
   ExactCount,
@@ -28,13 +30,14 @@ import { formatKickoff, formatTimeET, stageLabel } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
-  const [leaderboard, appState, opener, playerCount, matchday, groupProgress] = await Promise.all([
+  const [leaderboard, appState, opener, playerCount, matchday, groupProgress, pathData] = await Promise.all([
     getLeaderboard(),
     getAppState(),
     getOpener(),
     getParticipantCount(),
     getMatchday(),
     getGroupStageProgress(),
+    getPathToTrophy(),
   ]);
   const lastSettledAt = appState.lastSettledAt;
   const before = !!opener && !tournamentUnderway(opener);
@@ -101,6 +104,8 @@ export default async function LeaderboardPage() {
               )}
             </>
           )}
+
+          {!before && <PathHero data={pathData} />}
 
       {/* Table — skill metrics (Pick % / Exact / Form) on one line per player,
           with persistent column headers at every width. */}

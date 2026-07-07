@@ -7,6 +7,7 @@ const TABS = [
   { href: "/matches", label: "Matches" },
   { href: "/groups", label: "Groups" },
   { href: "/bracket", label: "Bracket" },
+  { href: "/path", label: "Path" },
 ];
 
 export function TabNav() {

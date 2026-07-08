@@ -107,11 +107,11 @@ function PathCard({ p, scale }: { p: PathRowView; scale: number }) {
             />
           </div>
 
-          {p.stakes.some((s) => s.status !== "dead") && (
+          {p.stakes.some((s) => s.status === "live") && (
             <>
-              <div className="mt-3 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-dim">Your picks in play</div>
+              <div className="mt-3 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-dim">Still at stake</div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {p.stakes.filter((s) => s.status !== "dead").map((s, i) => <StakeChip key={i} s={s} />)}
+                {p.stakes.filter((s) => s.status === "live").map((s, i) => <StakeChip key={i} s={s} />)}
               </div>
             </>
           )}

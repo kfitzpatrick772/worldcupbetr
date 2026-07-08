@@ -94,7 +94,23 @@ function PathCard({ p, scale }: { p: PathRowView; scale: number }) {
         <p className="mt-2 text-sm text-dim">{p.reason}</p>
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[0.72rem] text-dim">
+          {/* Path to win leads the card */}
+          <div className="mt-2">
+            <div className="font-mono text-[0.62rem] uppercase tracking-[0.14em] text-gold">What must happen</div>
+            {p.mustHappen.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {p.mustHappen.map((m, i) => (
+                  <li key={i} className="relative pl-4 text-[0.9rem] text-ink before:absolute before:left-1 before:text-gold before:content-['\203A']">
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-[0.9rem] text-ink">{p.rooting}</p>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[0.72rem] text-dim">
             <span>ceiling <b className="tnum text-ink">{p.tightMax}</b></span>
             <span>{p.gapToLead >= 0 ? "lead" : "behind"} <b className="tnum text-ink">{p.gapToLead >= 0 ? `+${p.gapToLead}` : p.gapToLead}</b></span>
             {p.winShare != null && <span>win chance <b className="tnum text-gold">{Math.round(p.winShare * 100)}%</b></span>}
@@ -113,19 +129,6 @@ function PathCard({ p, scale }: { p: PathRowView; scale: number }) {
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {p.stakes.filter((s) => s.status === "live").map((s, i) => <StakeChip key={i} s={s} />)}
               </div>
-            </>
-          )}
-
-          {p.mustHappen.length > 0 && (
-            <>
-              <div className="mt-3 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-dim">What must happen</div>
-              <ul className="mt-1 space-y-1">
-                {p.mustHappen.map((m, i) => (
-                  <li key={i} className="relative pl-4 text-[0.84rem] text-mut before:absolute before:left-1 before:text-gold before:content-['\203A']">
-                    {m}
-                  </li>
-                ))}
-              </ul>
             </>
           )}
         </>

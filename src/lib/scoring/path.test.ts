@@ -117,6 +117,40 @@ describe("exact enumeration (final undecided)", () => {
     expect(res.byPlayer.get("B")!.eliminated).toBe(true);
   });
 
+  it("cascades through SF → final and reports exact win share + required results", () => {
+    // QF decided: winners A,B,C,D → SF is A-vs-B (M101) and C-vs-D (M102).
+    const s = new Map<string, KoSlot>([
+      ["M97", { slot: "M97", home: "A", away: "x", winner: "A" }],
+      ["M98", { slot: "M98", home: "B", away: "y", winner: "B" }],
+      ["M99", { slot: "M99", home: "C", away: "z", winner: "C" }],
+      ["M100", { slot: "M100", home: "D", away: "w", winner: "D" }],
+      ["M101", { slot: "M101", home: null, away: null, winner: null }], // A vs B
+      ["M102", { slot: "M102", home: null, away: null, winner: null }], // C vs D
+      ["M103", { slot: "M103", home: null, away: null, winner: null }], // third
+      ["M104", { slot: "M104", home: null, away: null, winner: null }], // final
+    ]);
+    const p1 = player({ name: "P1", groupPart: 10, championId: "A" });
+    const p2 = player({ name: "P2", groupPart: 0, championId: "C" });
+    const p3 = player({ name: "P3", groupPart: 5 }); // no picks — can't gain
+    const res = exactPaths([p1, p2, p3], s)!;
+    expect(res.totalScenarios).toBe(16); // 2^4 undecided games
+
+    const P1 = res.byPlayer.get("P1")!;
+    const P2 = res.byPlayer.get("P2")!;
+    const P3 = res.byPlayer.get("P3")!;
+    // P1 leads by 10 and also owns champion A: wins whenever A is champ OR nobody they trail scores → 12/16.
+    expect(P1.winShare).toBeCloseTo(12 / 16);
+    // P2 only wins if their champion C wins it all → C beats D (M102) AND C wins the final (M104).
+    expect(P2.winShare).toBeCloseTo(4 / 16);
+    expect(P2.mustHappen).toEqual([
+      { slot: "M102", teamId: "C" },
+      { slot: "M104", teamId: "C" },
+    ]);
+    // P3 can never gain → eliminated.
+    expect(P3.eliminated).toBe(true);
+    expect(P3.winShare).toBe(0);
+  });
+
   it("returns null when the remaining bracket is too big to enumerate", () => {
     const big = new Map<string, KoSlot>();
     for (let i = 89; i <= 104; i++) big.set(`M${i}`, { slot: `M${i}`, home: "A", away: "B", winner: null });

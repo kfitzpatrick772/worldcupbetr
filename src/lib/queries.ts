@@ -651,7 +651,11 @@ export async function getPathToTrophy(): Promise<PathToTrophy> {
   }));
 
   const analyzed = analyzePaths(pathPlayers, koState);
-  const exact = started ? exactPaths(pathPlayers, slots) : null;
+  // Don't trust the exact enumeration if a finished knockout game has no
+  // resolvable winner (e.g. a shootout with no winnerTeamId recorded) — its
+  // downstream slots can't be played out, so fall back to the heuristic.
+  const dataComplete = !ko.some((m) => m.status === "FINISHED" && !slots.get(m.slotLabel!)?.winner);
+  const exact = started && dataComplete ? exactPaths(pathPlayers, slots) : null;
   const leader = analyzed.reduce((a, b) => (b.locked > a.locked ? b : a), analyzed[0]);
   const leaderChampAlive =
     leader && leader.stakes.find((s) => s.label === "Champion" && s.status === "live");
@@ -680,17 +684,37 @@ export async function getPathToTrophy(): Promise<PathToTrophy> {
     const clinched = ex ? ex.clinched : row.clinched;
     const status: PathStatus = clinched ? "clinched" : eliminated ? "eliminated" : row.status === "eliminated" ? "long_shot" : row.status;
 
-    // readable "what must happen"
+    // A required result, spelled out: "Argentina must win the final",
+    // "France must beat Spain in the semi-final".
+    const condText = (c: { slot: string; teamId: string }) => {
+      const stg = slotStage(c.slot);
+      const team = tName(c.teamId);
+      const opp = slotOpponent(c.slot, c.teamId);
+      if (stg === "final") return `${team} must win the final`;
+      if (stg === "third-place game") return `${team} must win the third-place game`;
+      return opp ? `${team} must beat ${opp} in the ${stg}` : `${team} must win their ${stg}`;
+    };
+    const pct = ex ? Math.round(ex.winShare * 100) : 0;
+
+    // readable "what must happen" — explicit, and never the vague old phrasing
     let mustHappen: string[] = [];
-    if (ex && !eliminated && !clinched && ex.mustHappen.length) {
-      mustHappen = ex.mustHappen.slice(0, 4).map((c) => {
-        const opp = slotOpponent(c.slot, c.teamId);
-        return opp ? `${tName(c.teamId)} beats ${opp} (${slotStage(c.slot)})` : `${tName(c.teamId)} wins the ${slotStage(c.slot)}`;
-      });
-    } else if (!eliminated && topLive) {
-      mustHappen = [`You need ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"} (+${topLive.points}).`];
+    if (eliminated) {
+      mustHappen = [];
+    } else if (clinched) {
+      mustHappen = ["Already guaranteed — the title is yours no matter what."];
+    } else if (ex) {
+      if (ex.mustHappen.length) {
+        // hard requirements present in every way you still win
+        mustHappen = ex.mustHappen.slice(0, 5).map(condText);
+      } else {
+        mustHappen = [`No single result is required — you finish first in ${pct}% of the ways the rest of the bracket can play out.`];
+      }
+      if (topLive) mustHappen.push(`Your biggest swing: ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"} (+${topLive.points}).`);
+    } else if (topLive) {
+      // earlier rounds (too many outcomes to enumerate) — directional but clear
+      mustHappen = [`Your best route: ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"} (+${topLive.points}).`];
       if (status !== "in_control" && leaderChampAlive && leader.participantId !== row.participantId) {
-        mustHappen.push(`…and ${leader.name}'s ${tName(leaderChampAlive.teamId)} to slip up.`);
+        mustHappen.push(`You'll also need the leader ${leader.name}'s title pick, ${tName(leaderChampAlive.teamId)}, to fall short.`);
       }
     }
 
@@ -699,7 +723,8 @@ export async function getPathToTrophy(): Promise<PathToTrophy> {
     if (clinched) rooting = "Title already clinched.";
     else if (eliminated) rooting = "Out of contention.";
     else if (status === "in_control")
-      rooting = `Leads by ${row.gapToLead}.` + (topLive ? ` Clinches if ${tName(topLive.teamId)} ${VERB[topLive.label] ?? "delivers"}.` : "");
+      rooting = `Leads by ${row.gapToLead}.` + (ex ? ` Wins in ${pct}% of outcomes.` : topLive ? ` Clinches if ${tName(topLive.teamId)} ${VERB[topLive.label] ?? "delivers"}.` : "");
+    else if (ex) rooting = `Wins in ${pct}% of outcomes` + (topLive ? ` — needs ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"}.` : ".");
     else rooting = topLive ? `Needs ${tName(topLive.teamId)} to ${VERB[topLive.label] ?? "come through"}.` : "Needs help.";
 
     const reason = eliminated

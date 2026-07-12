@@ -33,6 +33,26 @@ interface ApiFixtureRow {
   goals: { home: number | null; away: number | null };
 }
 
+// API-Football always answers HTTP 200 — even for rate-limit, bad key, wrong
+// plan, or unknown league/season. The failure shows up in `errors` (an object
+// of {reason: message} on failure, an empty array on success) with an empty
+// `response`. We MUST inspect it: otherwise a quota-exhausted feed looks
+// identical to "no fixtures", the sync silently no-ops, and the board freezes
+// with every monitor still green.
+interface ApiEnvelope {
+  errors?: Record<string, string> | string[];
+  results?: number;
+  response?: ApiFixtureRow[];
+}
+
+/** API-Football reports failures in `errors` while still returning HTTP 200.
+ *  Returns the human-readable messages, or [] when the call actually succeeded. */
+export function apiFootballErrors(errors: ApiEnvelope["errors"]): string[] {
+  if (!errors) return [];
+  const messages = Array.isArray(errors) ? errors : Object.values(errors);
+  return messages.filter((m): m is string => typeof m === "string" && m.length > 0);
+}
+
 export class ApiFootballProvider implements ScoreProvider {
   readonly name = "api-football";
   constructor(private readonly key = process.env.APIFOOTBALL_KEY) {}
@@ -45,7 +65,17 @@ export class ApiFootballProvider implements ScoreProvider {
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`api-football ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { response: ApiFixtureRow[] };
+    const json = (await res.json()) as ApiEnvelope;
+
+    // Fail loud on a soft error (HTTP 200 + populated `errors`) instead of
+    // treating it as "no fixtures" and silently freezing the board. The most
+    // common cause is daily quota exhaustion (~96 scheduled calls/day against
+    // the free tier's 100) — the cron endpoint then returns 502 and the sync
+    // workflow goes red with the real reason.
+    const errors = apiFootballErrors(json.errors);
+    if (errors.length > 0) {
+      throw new Error(`api-football error: ${errors.join("; ")}`);
+    }
 
     return (json.response ?? []).map((r): FeedFixture => {
       const status = mapStatus(r.fixture.status.short);

@@ -47,6 +47,33 @@ describe("ApiFootballProvider.fetchFixtures", () => {
     await expect(provider.fetchFixtures()).rejects.toThrow(/0 fixtures/);
   });
 
+  // 104-fixture tournament > 100/page: the final rounds live on page 2. Reading
+  // only page 1 drops them and freezes the QF/SF/Final while the group stage
+  // (page 1) keeps updating — the "worked all tournament, broke at the end" bug.
+  it("walks every page so the final rounds are not dropped", async () => {
+    const row = (id: number, home: string, away: string, short: string) => ({
+      fixture: { id, date: "2026-07-19T19:00:00Z", status: { short }, venue: { name: null, city: null } },
+      teams: { home: { id: 1, name: home, winner: short === "FT" }, away: { id: 2, name: away, winner: false } },
+      goals: { home: 2, away: 1 },
+    });
+    const calls: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const page = Number(new URL(url).searchParams.get("page"));
+        calls.push(page);
+        const body =
+          page === 1
+            ? { errors: [], results: 100, paging: { current: 1, total: 2 }, response: [row(1, "Mexico", "Croatia", "FT")] }
+            : { errors: [], results: 4, paging: { current: 2, total: 2 }, response: [row(104, "Argentina", "France", "FT")] };
+        return new Response(JSON.stringify(body), { status: 200 });
+      }),
+    );
+    const fixtures = await provider.fetchFixtures();
+    expect(calls).toEqual([1, 2]); // both pages fetched
+    expect(fixtures.map((f) => f.externalRef)).toContain("apifootball:104"); // the Final survived
+  });
+
   it("parses fixtures when the call actually succeeds (errors: [])", async () => {
     stubFetch({
       errors: [],

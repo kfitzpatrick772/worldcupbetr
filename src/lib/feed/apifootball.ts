@@ -42,6 +42,7 @@ interface ApiFixtureRow {
 interface ApiEnvelope {
   errors?: Record<string, string> | string[];
   results?: number;
+  paging?: { current?: number; total?: number };
   response?: ApiFixtureRow[];
 }
 
@@ -57,24 +58,37 @@ export class ApiFootballProvider implements ScoreProvider {
   readonly name = "api-football";
   constructor(private readonly key = process.env.APIFOOTBALL_KEY) {}
 
-  async fetchFixtures(): Promise<FeedFixture[]> {
-    if (!this.key) throw new Error("APIFOOTBALL_KEY is not set");
-    const url = `${BASE}/fixtures?league=${LEAGUE}&season=${SEASON}`;
+  // Fetch one page of the season's fixtures and fail loud on API-Football's
+  // soft errors (it answers HTTP 200 even for quota/bad-key/wrong-league —
+  // the failure lives in `errors`, not the HTTP status).
+  private async fetchPage(page: number): Promise<ApiEnvelope> {
+    const url = `${BASE}/fixtures?league=${LEAGUE}&season=${SEASON}&page=${page}`;
     const res = await fetch(url, {
-      headers: { "x-apisports-key": this.key },
+      headers: { "x-apisports-key": this.key! },
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`api-football ${res.status}: ${await res.text()}`);
     const json = (await res.json()) as ApiEnvelope;
-
-    // Fail loud on a soft error (HTTP 200 + populated `errors`) instead of
-    // treating it as "no fixtures" and silently freezing the board. The most
-    // common cause is daily quota exhaustion (~96 scheduled calls/day against
-    // the free tier's 100) — the cron endpoint then returns 502 and the sync
-    // workflow goes red with the real reason.
     const errors = apiFootballErrors(json.errors);
     if (errors.length > 0) {
       throw new Error(`api-football error: ${errors.join("; ")}`);
+    }
+    return json;
+  }
+
+  async fetchFixtures(): Promise<FeedFixture[]> {
+    if (!this.key) throw new Error("APIFOOTBALL_KEY is not set");
+
+    // API-Football paginates the fixtures endpoint at 100 rows/page. A World
+    // Cup is 104 fixtures, so reading only page 1 silently drops the tail —
+    // the deepest rounds (QF/SF/3rd/Final) — and those games freeze while the
+    // group stage and early knockouts (page 1) keep updating. Walk every page.
+    const first = await this.fetchPage(1);
+    const rows: ApiFixtureRow[] = [...(first.response ?? [])];
+    const totalPages = Math.max(1, first.paging?.total ?? 1);
+    for (let page = 2; page <= totalPages; page++) {
+      const next = await this.fetchPage(page);
+      rows.push(...(next.response ?? []));
     }
 
     // This query has NO date filter — it asks for the whole league+season, so a
@@ -83,7 +97,6 @@ export class ApiFootballProvider implements ScoreProvider {
     // / APIFOOTBALL_SEASON, or a key with no access to this competition). Treat
     // it as fatal, not as "nothing to update" — otherwise the board freezes with
     // the sync reporting success.
-    const rows = json.response ?? [];
     if (rows.length === 0) {
       throw new Error(
         `api-football returned 0 fixtures for league=${LEAGUE} season=${SEASON} — ` +

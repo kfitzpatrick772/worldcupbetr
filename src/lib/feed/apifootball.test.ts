@@ -39,6 +39,14 @@ describe("ApiFootballProvider.fetchFixtures", () => {
     await expect(provider.fetchFixtures()).rejects.toThrow(/request limit/);
   });
 
+  // Wrong league/season (or a key without access) answers 200 with errors:[]
+  // and an empty response. A whole-season query must never be legitimately
+  // empty, so this must THROW rather than silently no-op the sync.
+  it("throws on an empty response (no date filter — the season is never empty)", async () => {
+    stubFetch({ errors: [], results: 0, response: [] });
+    await expect(provider.fetchFixtures()).rejects.toThrow(/0 fixtures/);
+  });
+
   it("parses fixtures when the call actually succeeds (errors: [])", async () => {
     stubFetch({
       errors: [],

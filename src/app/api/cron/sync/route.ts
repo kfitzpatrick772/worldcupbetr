@@ -35,6 +35,20 @@ async function run(req: Request): Promise<Response> {
 
   try {
     const result = await syncFromProvider(provider);
+    // The feed returned fixtures but not one matched our schedule — the board
+    // cannot update. Surface it as an error (not a 200) so the scheduler goes
+    // red instead of the board silently freezing while the sync "succeeds".
+    if (result.fetched > 0 && result.matched === 0) {
+      return Response.json(
+        {
+          error: `feed returned ${result.fetched} fixtures but none matched our schedule — ` +
+            `check team-name aliases in src/lib/feed/match.ts`,
+          provider: provider.name,
+          ...result,
+        },
+        { status: 502 },
+      );
+    }
     return Response.json({ provider: provider.name, ...result });
   } catch (e) {
     return Response.json(

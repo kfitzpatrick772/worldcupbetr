@@ -17,6 +17,14 @@ async function main() {
   if (res.unmatched.length) {
     console.warn(`⚠ ${res.unmatched.length} unmatched fixtures:`, res.unmatched.slice(0, 5));
   }
+  // Feed had fixtures but none matched — the board can't update. Fail loud so a
+  // cron/CI run goes red instead of the freeze passing unnoticed.
+  if (res.fetched > 0 && res.matched === 0) {
+    throw new Error(
+      `feed returned ${res.fetched} fixtures but none matched our schedule — ` +
+        `add team-name aliases in src/lib/feed/match.ts`,
+    );
+  }
 }
 
 main()

@@ -77,7 +77,21 @@ export class ApiFootballProvider implements ScoreProvider {
       throw new Error(`api-football error: ${errors.join("; ")}`);
     }
 
-    return (json.response ?? []).map((r): FeedFixture => {
+    // This query has NO date filter — it asks for the whole league+season, so a
+    // correctly configured feed always returns every fixture (100+). Zero rows
+    // with no `errors` means a silent misconfiguration (wrong APIFOOTBALL_LEAGUE
+    // / APIFOOTBALL_SEASON, or a key with no access to this competition). Treat
+    // it as fatal, not as "nothing to update" — otherwise the board freezes with
+    // the sync reporting success.
+    const rows = json.response ?? [];
+    if (rows.length === 0) {
+      throw new Error(
+        `api-football returned 0 fixtures for league=${LEAGUE} season=${SEASON} — ` +
+          `check APIFOOTBALL_LEAGUE / APIFOOTBALL_SEASON and that the key has access to this competition`,
+      );
+    }
+
+    return rows.map((r): FeedFixture => {
       const status = mapStatus(r.fixture.status.short);
       let winnerName: string | null = null;
       if (status === "FINISHED") {

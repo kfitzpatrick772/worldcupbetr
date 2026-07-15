@@ -6,7 +6,12 @@ name: Board diagnose
 # public, so the log exposes nothing sensitive.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "Comma-separated public paths to snapshot as text"
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -67,4 +72,26 @@ jobs:
           text = re.sub(r'&[#a-zA-Z0-9]+;', ' ', text)
           text = re.sub(r'\s+', ' ', text)
           print(text[:8000])
+          EOF
+
+      - name: Extra pages (text)
+        if: ${{ inputs.pages != '' }}
+        env:
+          PAGES: ${{ inputs.pages }}
+        run: |
+          python3 - <<'EOF'
+          import re, urllib.request, os
+          for path in os.environ["PAGES"].split(","):
+              path = path.strip()
+              if not path:
+                  continue
+              url = os.environ["APP_URL"] + path
+              html = urllib.request.urlopen(url, timeout=30).read().decode()
+              html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
+              html = re.sub(r'<style.*?</style>', '', html, flags=re.S)
+              text = re.sub(r'<[^>]+>', ' ', html)
+              text = re.sub(r'&[#a-zA-Z0-9]+;', ' ', text)
+              text = re.sub(r'\s+', ' ', text)
+              print(f"===== {path} =====")
+              print(text[:14000])
           EOF

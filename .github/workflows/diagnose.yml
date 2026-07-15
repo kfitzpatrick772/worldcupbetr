@@ -1,0 +1,70 @@
+name: Board diagnose
+
+# Manual-only production snapshot: prints the PUBLIC board pages (matches,
+# leaderboard, path) as text, plus health + an authed sync response. Used to
+# verify the live DB state when debugging the score feed — the pages are
+# public, so the log exposes nothing sensitive.
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_URL: ${{ vars.APP_URL || 'https://friendlybet.up.railway.app' }}
+    steps:
+      - name: Health + deployed sha
+        run: curl -sS --max-time 30 "$APP_URL/api/health" && echo
+
+      - name: Sync (authed) — current feed verdict
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -sS --max-time 60 -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/sync" && echo
+
+      - name: Matches page (text)
+        run: |
+          python3 - <<'EOF'
+          import re, urllib.request, os
+          url = os.environ["APP_URL"] + "/matches"
+          html = urllib.request.urlopen(url, timeout=30).read().decode()
+          html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
+          html = re.sub(r'<style.*?</style>', '', html, flags=re.S)
+          text = re.sub(r'<[^>]+>', ' ', html)
+          text = re.sub(r'&[#a-zA-Z0-9]+;', ' ', text)
+          text = re.sub(r'\s+', ' ', text)
+          print(text[:12000])
+          EOF
+
+      - name: Leaderboard page (text)
+        run: |
+          python3 - <<'EOF'
+          import re, urllib.request, os
+          url = os.environ["APP_URL"] + "/"
+          html = urllib.request.urlopen(url, timeout=30).read().decode()
+          html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
+          html = re.sub(r'<style.*?</style>', '', html, flags=re.S)
+          text = re.sub(r'<[^>]+>', ' ', html)
+          text = re.sub(r'&[#a-zA-Z0-9]+;', ' ', text)
+          text = re.sub(r'\s+', ' ', text)
+          print(text[:8000])
+          EOF
+
+      - name: Path page (text)
+        run: |
+          python3 - <<'EOF'
+          import re, urllib.request, os
+          url = os.environ["APP_URL"] + "/path"
+          html = urllib.request.urlopen(url, timeout=30).read().decode()
+          html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
+          html = re.sub(r'<style.*?</style>', '', html, flags=re.S)
+          text = re.sub(r'<[^>]+>', ' ', html)
+          text = re.sub(r'&[#a-zA-Z0-9]+;', ' ', text)
+          text = re.sub(r'\s+', ' ', text)
+          print(text[:8000])
+          EOF

@@ -58,38 +58,40 @@ export class ApiFootballProvider implements ScoreProvider {
   readonly name = "api-football";
   constructor(private readonly key = process.env.APIFOOTBALL_KEY) {}
 
-  // Fetch one page of the season's fixtures and fail loud on API-Football's
-  // soft errors (it answers HTTP 200 even for quota/bad-key/wrong-league —
-  // the failure lives in `errors`, not the HTTP status).
-  private async fetchPage(page: number): Promise<ApiEnvelope> {
-    const url = `${BASE}/fixtures?league=${LEAGUE}&season=${SEASON}&page=${page}`;
+  async fetchFixtures(): Promise<FeedFixture[]> {
+    if (!this.key) throw new Error("APIFOOTBALL_KEY is not set");
+
+    // NOTE: no `page` parameter — the fixtures endpoint rejects it outright
+    // ("The Page field do not exist", verified against the live API 2026-07-15).
+    // A league+season query returns the whole season in one response.
+    const url = `${BASE}/fixtures?league=${LEAGUE}&season=${SEASON}`;
     const res = await fetch(url, {
-      headers: { "x-apisports-key": this.key! },
+      headers: { "x-apisports-key": this.key },
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`api-football ${res.status}: ${await res.text()}`);
     const json = (await res.json()) as ApiEnvelope;
+
+    // Fail loud on a soft error (HTTP 200 + populated `errors`) instead of
+    // treating it as "no fixtures" and silently freezing the board — e.g. an
+    // expired plan reports "Free plans do not have access to this season" here
+    // while the HTTP status stays 200.
     const errors = apiFootballErrors(json.errors);
     if (errors.length > 0) {
       throw new Error(`api-football error: ${errors.join("; ")}`);
     }
-    return json;
-  }
 
-  async fetchFixtures(): Promise<FeedFixture[]> {
-    if (!this.key) throw new Error("APIFOOTBALL_KEY is not set");
-
-    // API-Football paginates the fixtures endpoint at 100 rows/page. A World
-    // Cup is 104 fixtures, so reading only page 1 silently drops the tail —
-    // the deepest rounds (QF/SF/3rd/Final) — and those games freeze while the
-    // group stage and early knockouts (page 1) keep updating. Walk every page.
-    const first = await this.fetchPage(1);
-    const rows: ApiFixtureRow[] = [...(first.response ?? [])];
-    const totalPages = Math.max(1, first.paging?.total ?? 1);
-    for (let page = 2; page <= totalPages; page++) {
-      const next = await this.fetchPage(page);
-      rows.push(...(next.response ?? []));
+    // If the API ever DOES split this query across pages, refuse to proceed on
+    // a partial list rather than silently dropping the tail (which would be the
+    // final rounds). Better a red sync naming the problem than a frozen board.
+    if ((json.paging?.total ?? 1) > 1) {
+      throw new Error(
+        `api-football returned page 1 of ${json.paging!.total} — partial fixture list; ` +
+          `the provider needs a supported pagination parameter for this endpoint`,
+      );
     }
+
+    const rows: ApiFixtureRow[] = json.response ?? [];
 
     // This query has NO date filter — it asks for the whole league+season, so a
     // correctly configured feed always returns every fixture (100+). Zero rows

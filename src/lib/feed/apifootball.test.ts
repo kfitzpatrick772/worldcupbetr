@@ -47,31 +47,47 @@ describe("ApiFootballProvider.fetchFixtures", () => {
     await expect(provider.fetchFixtures()).rejects.toThrow(/0 fixtures/);
   });
 
-  // 104-fixture tournament > 100/page: the final rounds live on page 2. Reading
-  // only page 1 drops them and freezes the QF/SF/Final while the group stage
-  // (page 1) keeps updating — the "worked all tournament, broke at the end" bug.
-  it("walks every page so the final rounds are not dropped", async () => {
-    const row = (id: number, home: string, away: string, short: string) => ({
-      fixture: { id, date: "2026-07-19T19:00:00Z", status: { short }, venue: { name: null, city: null } },
-      teams: { home: { id: 1, name: home, winner: short === "FT" }, away: { id: 2, name: away, winner: false } },
-      goals: { home: 2, away: 1 },
-    });
-    const calls: number[] = [];
+  // The fixtures endpoint REJECTS a `page` parameter ("The Page field do not
+  // exist" — verified against the live API 2026-07-15). Never send one.
+  it("does not send a page parameter (the endpoint rejects it)", async () => {
+    const urls: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        const page = Number(new URL(url).searchParams.get("page"));
-        calls.push(page);
-        const body =
-          page === 1
-            ? { errors: [], results: 100, paging: { current: 1, total: 2 }, response: [row(1, "Mexico", "Croatia", "FT")] }
-            : { errors: [], results: 4, paging: { current: 2, total: 2 }, response: [row(104, "Argentina", "France", "FT")] };
-        return new Response(JSON.stringify(body), { status: 200 });
+        urls.push(url);
+        return new Response(
+          JSON.stringify({ errors: [], results: 1, paging: { current: 1, total: 1 }, response: [
+            {
+              fixture: { id: 1, date: "2026-06-11T19:00:00Z", status: { short: "FT" }, venue: { name: null, city: null } },
+              teams: { home: { id: 1, name: "Mexico", winner: true }, away: { id: 2, name: "Croatia", winner: false } },
+              goals: { home: 2, away: 1 },
+            },
+          ] }),
+          { status: 200 },
+        );
       }),
     );
-    const fixtures = await provider.fetchFixtures();
-    expect(calls).toEqual([1, 2]); // both pages fetched
-    expect(fixtures.map((f) => f.externalRef)).toContain("apifootball:104"); // the Final survived
+    await provider.fetchFixtures();
+    expect(urls).toHaveLength(1);
+    expect(new URL(urls[0]).searchParams.has("page")).toBe(false);
+  });
+
+  // If the API ever reports more pages than the one response, a partial list
+  // must fail loud — silently dropping the tail would freeze the final rounds.
+  it("throws when the API reports a multi-page result", async () => {
+    stubFetch({
+      errors: [],
+      results: 100,
+      paging: { current: 1, total: 2 },
+      response: [
+        {
+          fixture: { id: 1, date: "2026-06-11T19:00:00Z", status: { short: "FT" }, venue: { name: null, city: null } },
+          teams: { home: { id: 1, name: "Mexico", winner: true }, away: { id: 2, name: "Croatia", winner: false } },
+          goals: { home: 2, away: 1 },
+        },
+      ],
+    });
+    await expect(provider.fetchFixtures()).rejects.toThrow(/partial fixture list/);
   });
 
   it("parses fixtures when the call actually succeeds (errors: [])", async () => {
